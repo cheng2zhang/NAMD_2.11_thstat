@@ -155,6 +155,7 @@ protected:
       int rescaleVelocities_numTemps;
     void reassignVelocities(int);
     void tcoupleVelocities(int);
+    void langRescaleVelocities(int);
     void berendsenPressure(int);
       // Tensor berendsenPressure_avg;
       // int berendsenPressure_count;

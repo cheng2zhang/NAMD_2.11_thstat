@@ -1178,6 +1178,19 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
      "containing the temperature coupling term B(i);\n"
      "default is 'O'", PARSE_STRING);
 
+   //  Get the parameters for Langevin velocity-rescaling thermostat
+   opts.optionalB("main", "langrescale", 
+      "Should Langevin velocity-rescaling thermostat be turned on?",
+      &langRescaleOn, FALSE);
+   opts.require("langrescale", "langRescaleTemp",
+    "Temperature for Langevin velocity-rescaling thermostat",
+    &langRescaleTemp);
+   opts.range("langRescaleTemp", NOT_NEGATIVE);
+   opts.units("langRescaleTemp", N_KELVIN);
+   opts.optional("langrescale", "langRescaleVisc",
+    "Viscosity for Langevin velocity-rescaling thermostat",
+    &langRescaleVisc, 50);
+
    opts.optional("main", "rescaleFreq", "Number of steps between "
     "velocity rescaling", &rescaleFreq);
    opts.range("rescaleFreq", POSITIVE);

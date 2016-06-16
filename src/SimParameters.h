@@ -497,6 +497,11 @@ public:
 					//  active
 	BigReal tCoupleTemp;		//  Temperature for temp coupling
 
+	Bool langRescaleOn;		//  Flag TRUE-> Langevin velocity-rescaling
+					//  thermostat active
+	BigReal langRescaleTemp;	//  Temperature for Langevin velocity-rescaling thermostat
+	BigReal langRescaleVisc;	//  Viscosity for Langevin velocity-rescaling thermostat
+
 	int rescaleFreq;		//  Velocity rescale frequency
 	BigReal rescaleTemp;		//  Temperature to rescale to
 

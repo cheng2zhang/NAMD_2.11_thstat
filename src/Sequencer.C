@@ -1289,6 +1289,19 @@ void Sequencer::tcoupleVelocities(BigReal dt_fs, int step)
   }
 }
 
+void Sequencer::langRescaleVelocities(BigReal dt, int step)
+{
+  if ( simParams->langRescaleOn )
+  {
+    FullAtom *a = patch->atom.begin();
+    int numAtoms = patch->numAtoms;
+    BigReal coefficient = broadcast->langRescaleCoefficient.get(step);
+    Molecule *molecule = Node::Object()->molecule;
+    for ( int i = 0; i < numAtoms; ++i )
+      a[i].velocity *= coefficient;
+  }
+}
+
 void Sequencer::saveForce(const int ftag)
 {
   patch->saveForce(ftag);

@@ -140,6 +140,43 @@ public:
     return Vector( gaussian(), gaussian(), gaussian() );
   }
 
+  // return a number from a gamma distribution of k degrees
+  BigReal gamma(BigReal k)
+  {
+    int lt1 = 0;
+    BigReal a, b, x, v, u;
+
+    if ( k <= 0 ) return 0;
+    if ( k < 1 ) {
+      lt1 = 1;
+      k += 1;
+    }
+    a = k - 1./3;
+    b = 1./3/sqrt(a);
+
+    for ( ; ; ) {
+      do {
+        x = gaussian();
+        v = 1 + b * x;
+      } while ( v <= 0 );
+      v *= v * v;
+      x *= x;
+      u = uniform();
+      if ( u <= 1 - 0.331 * x * x ) break;
+      u = log(u);
+      if ( u <= 0.5 * x + a * (1 - v + log(v)) ) break;
+    }
+
+    x = a * v;
+    if ( lt1 ) x *= pow(1 - uniform(), 1./(k - 1));
+    return x;
+  }
+
+  BigReal chisqr(double k)
+  {
+    return gamma( k * 0.5 ) * 2;
+  }
+
   // return a random long
   long integer(void) {
     skip();

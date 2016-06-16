@@ -440,6 +440,7 @@ void Controller::integrate(int scriptTask) {
         adaptTempUpdate(step);
         rescaleVelocities(step);
 	tcoupleVelocities(step);
+	langRescaleVelocities(step);
 	berendsenPressure(step);
 	langevinPiston1(step);
         rescaleaccelMD(step);
@@ -1107,6 +1108,25 @@ void Controller::tcoupleVelocities(int step)
     BigReal coefficient = 1.;
     if ( temperature > 0. ) coefficient = tCoupleTemp/temperature - 1.;
     broadcast->tcoupleCoefficient.publish(step,coefficient);
+  }
+}
+
+// (JCP 126, 014101)
+void Controller::langRescaleVelocities(int step)
+{
+  if ( simParams->langRescaleOn )
+  {
+    const BigReal tp = simParams->langRescaleTemp;
+    BigReal dt = simParams->dt * simParams->langRescaleVisc;
+    BigReal c = exp(-dt);
+    BigReal r = random->gaussian();
+    BigReal r2 = random->chisqr(numDegFreedom - 1);
+    BigReal ek1 = kineticEnergy; // Halfstep, Centered? 
+    BigReal ek2 = ek1 + (1 - c) * ((r2 + r * r) * tp / 2 - ek1)
+        + 2 * r * sqrt(c * (1 - c) * ek1 * tp / 2);
+    if ( ek2 < 0 ) ek2 = 0;
+    BigReal coefficient = sqrt(ek2 / ek1);
+    broadcast->langRescaleCoefficient.publish(step,coefficient);
   }
 }
 

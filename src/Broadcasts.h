@@ -39,6 +39,7 @@ enum {
   velocityRescaleFactorTag,
   positionRescaleFactorTag,
   tcoupleCoefficientTag,
+  langRescaleCoefficientTag,
   minimizeCoefficientTag,
   momentumCorrectionTag,
 #if USE_BARRIER
@@ -60,6 +61,7 @@ struct ControllerBroadcasts
   SimpleBroadcastObject<BigReal> velocityRescaleFactor;
   SimpleBroadcastObject<Tensor> positionRescaleFactor;
   SimpleBroadcastObject<BigReal> tcoupleCoefficient;
+  SimpleBroadcastObject<BigReal> langRescaleCoefficient;
   SimpleBroadcastObject<BigReal> minimizeCoefficient;
   SimpleBroadcastObject<Vector> momentumCorrection;
 #if USE_BARRIER
@@ -77,6 +79,7 @@ struct ControllerBroadcasts
     velocityRescaleFactor(velocityRescaleFactorTag, ldObjPtr),
     positionRescaleFactor(positionRescaleFactorTag, ldObjPtr),
     tcoupleCoefficient(tcoupleCoefficientTag, ldObjPtr),
+    langRescaleCoefficient(langRescaleCoefficientTag, ldObjPtr),
     minimizeCoefficient(minimizeCoefficientTag, ldObjPtr),
     momentumCorrection(momentumCorrectionTag, ldObjPtr),
 #if USE_BARRIER
