@@ -1114,9 +1114,13 @@ void Controller::tcoupleVelocities(int step)
 // (JCP 126, 014101)
 void Controller::langRescaleVelocities(int step)
 {
-  if ( simParams->langRescaleOn )
-  {
-    const BigReal tp = simParams->langRescaleTemp;
+  if ( simParams->langRescaleOn ) {
+    BigReal tp = simParams->langRescaleTemp;
+    if ( simParams->adaptTempOn && simParams->adaptTempRescale
+     && (step > simParams->adaptTempFirstStep )
+     && (!(simParams->adaptTempLastStep > 0) || step < simParams->adaptTempLastStep )) {
+      tp = adaptTempT;
+    }
     BigReal dt = simParams->dt * simParams->langRescaleVisc;
     BigReal c = exp(-dt);
     BigReal r = random->gaussian();
@@ -1911,6 +1915,8 @@ void Controller::adaptTempUpdate(int step, int minimize)
         dT += adaptTempT;
         // Check again, if not then keep original adaptTempTor assign random.
         if ( dT > 1./adaptTempBetaMin ) {
+          dT = adaptTempT;
+          /* adaptTempRandom is invalid
           if (!simParams->adaptTempRandom) {             
              //iout << iWARN << "ADAPTEMP: " << step << " T= " << dT 
              //     << " K higher than adaptTempTmax."
@@ -1925,8 +1931,11 @@ void Controller::adaptTempUpdate(int step, int minimize)
              dT = adaptTempBetaMin +  random->uniform()*(adaptTempBetaMax-adaptTempBetaMin);             
              dT = 1./dT;
           }
+          */
         } 
         else if ( dT  < 1./adaptTempBetaMax ) {
+          dT = adaptTempT;
+          /* adaptTempRandom is invalid
           if (!simParams->adaptTempRandom) {            
             //iout << iWARN << "ADAPTEMP: " << step << " T= "<< dT 
             //     << " K lower than adaptTempTmin."
@@ -1940,6 +1949,7 @@ void Controller::adaptTempUpdate(int step, int minimize)
             dT = adaptTempBetaMin +  random->uniform()*(adaptTempBetaMax-adaptTempBetaMin);
             dT = 1./dT;
           }
+          */
         }
         else if (adaptTempAutoDt) {
           //update temperature step size counter
@@ -1999,6 +2009,7 @@ void Controller::adaptTempUpdate(int step, int minimize)
           
       }
       
+      broadcast->adaptTempScale.publish(step, sqrt(dT/adaptTempT));
       adaptTempT = dT; 
       broadcast->adaptTemperature.publish(step,adaptTempT);
     }

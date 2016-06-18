@@ -228,7 +228,8 @@ void Sequencer::integrate(int scriptTask) {
         adaptTempT = simParams->langevinTemp;
     else if (simParams->rescaleFreq > 0)
         adaptTempT = simParams->rescaleTemp;
-        
+    else if (simParams->langRescaleOn)
+        adaptTempT = simParams->langRescaleTemp;    
 
     int &doMolly = patch->flags.doMolly;
     doMolly = simParams->mollyOn && doFullElectrostatics;
@@ -1194,7 +1195,10 @@ void Sequencer::adaptTempUpdate(int step)
    }
    // Get Updated Temperature
    if ( !(step % simParams->adaptTempFreq ) && (step > simParams->firstTimestep ))
+   {
+    rescaleVelocitiesByFactor( broadcast->adaptTempScale.get(step) );
     adaptTempT = broadcast->adaptTemperature.get(step);
+   }
 }
 
 void Sequencer::reassignVelocities(BigReal timestep, int step)
