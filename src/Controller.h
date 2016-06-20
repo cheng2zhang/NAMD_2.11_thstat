@@ -156,6 +156,13 @@ protected:
     void reassignVelocities(int);
     void tcoupleVelocities(int);
     void langRescaleVelocities(int);
+    void tNHCInit(void);
+    void tNHCDone(int);
+    void tNHCRescaleVelocities(int, BigReal);
+    void tNHCSave(int);
+    void tNHCLoad(void);
+    BigReal *tNHCzeta;
+    BigReal *tNHCmass;
     void berendsenPressure(int);
       // Tensor berendsenPressure_avg;
       // int berendsenPressure_count;

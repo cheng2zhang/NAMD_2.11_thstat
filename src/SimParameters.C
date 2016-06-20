@@ -1188,11 +1188,32 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
    opts.range("langRescaleTemp", NOT_NEGATIVE);
    opts.units("langRescaleTemp", N_KELVIN);
    opts.optional("langrescale", "langRescaleDt",
-    "Effective time step in femtoseconds for Langevin velocity-rescaling thermostat",
-    &langRescaleDt, 100.0);
+    "Inverse viscosity in femtoseconds^(-1) for Langevin velocity-rescaling thermostat",
+    &langRescaleDt, 20.0);
    opts.optional("main", "langRescaleFreq", "Number of steps between "
     "Langevin velocity rescaling steps", &langRescaleFreq, 1);
    opts.range("langRescaleFreq", POSITIVE);
+
+   //  Get the parameters for Langevin velocity-rescaling thermostat
+   opts.optionalB("main", "tNHC", "Should Nose-Hoover chain thermostat be turned on?",
+      &tNHCOn, FALSE);
+   opts.require("tNHC", "tNHCTemp", "Temperature for Nose-Hoover chain thermostat",
+    &tNHCTemp);
+   opts.range("tNHCTemp", NOT_NEGATIVE);
+   opts.units("tNHCTemp", N_KELVIN);
+   opts.require("tNHC", "tNHCLen", "Length of Nose-Hoover chain",
+    &tNHCLen, 1);
+   opts.range("tNHCLen", POSITIVE);
+   opts.optional("tNHC", "tNHCMass1", "Mass of the first NH-chain variable",
+    &tNHCMass1, 1000000.0);
+   opts.range("tNHCMass1", POSITIVE);
+   opts.optional("tNHC", "tNHCMass2", "Mass of the rest of the NH-chain variables",
+    &tNHCMass2, 0.0);
+   opts.optional("tNHC", "tNHCFile", "Restart file for the NH-chain",
+       tNHCFile);
+   opts.optional("tNHC", "tNHCFileFreq", "Frequency of writing restart file for the NH-chain",
+       &tNHCFileFreq, 10000);
+   opts.range("tNHCFileFreq", POSITIVE);
 
    opts.optional("main", "rescaleFreq", "Number of steps between "
     "velocity rescaling", &rescaleFreq);

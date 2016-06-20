@@ -497,11 +497,19 @@ public:
 					//  active
 	BigReal tCoupleTemp;		//  Temperature for temp coupling
 
-	Bool langRescaleOn;		//  Flag TRUE-> Langevin velocity-rescaling
-					//  thermostat active
+	Bool langRescaleOn;		//  Flag TRUE-> Langevin velocity-rescaling thermostat active
+					//  Bussi, Donadio, and Parrinello, JCP 126, 014101 (2007)
 	BigReal langRescaleTemp;	//  Temperature for Langevin velocity-rescaling thermostat
-	BigReal langRescaleDt;	        //  Effective time step in fs for Langevin velocity-rescaling thermostat
+	BigReal langRescaleDt;	        //  Invese viscosity in fs^(-1) for Langevin velocity-rescaling thermostat
 	int langRescaleFreq;	        //  number of MD steps between two Langevin velocity-rescaling steps
+
+        int tNHCOn;                     // Flag TRUE-> Nose-Hoover chain thermostat
+        BigReal tNHCTemp;               // Temperature of the Nose-Hoover chain
+        int tNHCLen;                    // Length of the Nose-Hoover chain
+        BigReal tNHCMass1;              // Mass of the first NH-chain variable
+        BigReal tNHCMass2;              // Mass of the rest of the NH-chain variables
+        char tNHCFile[128];             // Restart file for the NH-chain
+        int tNHCFileFreq;               // Frequency of writing the NH-chain restart file
 
 	int rescaleFreq;		//  Velocity rescale frequency
 	BigReal rescaleTemp;		//  Temperature to rescale to

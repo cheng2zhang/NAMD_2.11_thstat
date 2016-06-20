@@ -406,6 +406,8 @@ void Controller::integrate(int scriptTask) {
       slowFreq = simParams->nonbondedFrequency;
     if ( step >= numberOfSteps ) slowFreq = nbondFreq = 1;
 
+    tNHCInit();
+
   if ( scriptTask == SCRIPT_RUN ) {
 
     reassignVelocities(step);  // only for full-step velecities
@@ -441,6 +443,7 @@ void Controller::integrate(int scriptTask) {
         rescaleVelocities(step);
 	tcoupleVelocities(step);
 	langRescaleVelocities(step);
+	tNHCRescaleVelocities(step, simParams->dt);
 	berendsenPressure(step);
 	langevinPiston1(step);
         rescaleaccelMD(step);
@@ -502,6 +505,8 @@ void Controller::integrate(int scriptTask) {
 #endif
     }
     // signal(SIGINT, oldhandler);
+    
+    tNHCDone(step);
 }
 
 
@@ -1134,11 +1139,140 @@ void Controller::langRescaleVelocities(int step)
     BigReal ek2 = ek1 + (1 - c) * ((r2 + r * r) * tp / 2 - ek1);
                 + 2 * r * sqrt(c * (1 - c) * ek1 * tp / 2);
     if ( ek2 < 0 ) ek2 = 0;
-    BigReal coefficient = sqrt(ek2 / ek1);
-    //CkPrintf("Controller step %d, freq %d, dt %g/%g, tp %g, c %g, coef %g r2 + r*r %g, %d, ek %g(%g) -> %g(%g)\n",
-    //    step, simParams->langRescaleFreq, simParams->dt, dt, tp, c, coefficient, r2 + r*r, numDegFreedom, ek1, 2*ek1/numDegFreedom/BOLTZMANN, ek2, 2*ek2/numDegFreedom/BOLTZMANN);
-    broadcast->langRescaleCoefficient.publish(step,coefficient);
+    BigReal factor = sqrt(ek2 / ek1);
+    //CkPrintf("Controller step %d, freq %d, dt %g/%g, tp %g/%g, c %g, fac %g r2 + r*r %g, %d, ek %g(%g) -> %g(%g)\n",
+    //    step, simParams->langRescaleFreq, simParams->dt, dt, tp, tp/BOLTZMANN, c, factor, r2 + r*r, numDegFreedom, ek1, 2*ek1/numDegFreedom/BOLTZMANN, ek2, 2*ek2/numDegFreedom/BOLTZMANN);
+    broadcast->langRescaleFactor.publish(step,factor);
   }
+}
+
+void Controller::tNHCInit(void)
+{
+  if ( !simParams->tNHCOn ) return;
+
+  if ( simParams->tNHCMass2 <= 0 )
+    simParams->tNHCMass2 = simParams->tNHCMass1;
+
+  int nnhc = simParams->tNHCLen, i;
+  tNHCzeta = new BigReal [nnhc];
+  tNHCmass = new BigReal [nnhc];
+
+  for ( i = 0; i < nnhc; i++ ) {
+    tNHCzeta[i] = 0;
+    tNHCmass[i] = ( i == 0 ) ? simParams->tNHCMass1 : simParams->tNHCMass2;
+  }
+  //getchar();
+
+  // try to load the chain variables, ok if it fails
+  tNHCLoad();
+  for ( i = 0; i < nnhc; i++ )
+    CkPrintf("NHC %d: zeta %g, mass %g\n", i+1, tNHCzeta[i], tNHCmass[i]);
+}
+
+void Controller::tNHCDone(int step)
+{
+  if ( simParams->tNHCOn ) {
+    tNHCSave(step);
+    delete[] tNHCzeta;
+    delete[] tNHCmass;
+  }
+}
+
+// Nose-Hoover thermostat
+// TODO: Trotter version
+void Controller::tNHCRescaleVelocities(int step, BigReal dt)
+{
+  if ( simParams->tNHCOn ) {
+    BigReal tp = simParams->tNHCTemp;
+    // use the temperature from adaptive tempering, if any
+    if ( simParams->adaptTempOn && simParams->adaptTempRescale
+     && (step > simParams->adaptTempFirstStep )
+     && (!(simParams->adaptTempLastStep > 0) || step < simParams->adaptTempLastStep )) {
+      tp = adaptTempT;
+    }
+    tp *= BOLTZMANN;
+
+    int nnhc = simParams->tNHCLen, j, i;
+    BigReal s, GQ, mvv;
+
+    mvv = BOLTZMANN * temperature * numDegFreedom;
+    for ( j = nnhc - 1; j >= 0; j-- ) {
+      s = ( j == nnhc - 1 ) ? 1 : exp(-tNHCzeta[j+1]*dt*0.25);
+      if ( j == 0 ) {
+        GQ = mvv - numDegFreedom * tp;
+      } else {
+        GQ = tNHCmass[j-1] * tNHCzeta[j-1] * tNHCzeta[j-1] - tp;
+      }
+      tNHCzeta[j] = (tNHCzeta[j] * s + GQ /tNHCmass[j] * dt*0.5) * s;
+      //iout << "step " << step << ", j " << j << ", GQ " << GQ << ", mass " << tNHCmass[j] << ", dt " << dt << "\n";
+    }
+
+    // velocity scaling factor
+    BigReal factor = exp( -tNHCzeta[0] * dt );
+    //CkPrintf("Controller step %d, dt %g/%g, tp %g/%g, c %g, fac %g r2 + r*r %g, %d, ek %g(%g) -> %g(%g)\n",
+    //    step, simParams->dt, dt, tp, tp/BOLTZMANN, c, factor, r2 + r*r, numDegFreedom, ek1, 2*ek1/numDegFreedom/BOLTZMANN, ek2, 2*ek2/numDegFreedom/BOLTZMANN);
+    broadcast->tNHCRescaleFactor.publish(step,factor);
+
+    mvv *= factor * factor;
+
+    for ( j = 0; j < nnhc; j++ ) {
+      s = ( j == nnhc - 1 ) ? 1 : exp(-tNHCzeta[j+1]*dt*0.25);
+      if ( j == 0 ) {
+        GQ = mvv - numDegFreedom * tp;
+      } else {
+        GQ = tNHCmass[j-1] * tNHCzeta[j-1] * tNHCzeta[j-1] - tp;
+      }
+      tNHCzeta[j] = (tNHCzeta[j] * s + GQ /tNHCmass[j] * dt*0.5) * s;
+    }
+
+    if ( simParams->tNHCFileFreq > 0 && step % simParams->tNHCFileFreq == 0 )
+      tNHCSave(step);
+  }
+}
+
+void Controller::tNHCSave(int step)
+{
+  if ( !simParams->tNHCOn ) return;
+
+  FILE *fp;
+  int i, nnhc = simParams->tNHCLen;
+
+  if ( (fp = fopen(simParams->tNHCFile, "w")) == NULL ) {
+    iout << "Error: cannot write " << simParams->tNHCFile << "\n";
+    return;
+  }
+  fprintf(fp, "%d %d\n", nnhc, step);
+  for ( i = 0; i < nnhc; i++ )
+    fprintf(fp, "%.14f ", tNHCzeta[i]);
+  fprintf(fp, "\n");
+  for ( i = 0; i < nnhc; i++ )
+    fprintf(fp, "%g ", tNHCmass[i]);
+  fprintf(fp, "\n");
+  fclose(fp);
+}
+
+void Controller::tNHCLoad(void)
+{
+  if ( !simParams->tNHCOn ) return;
+
+  FILE *fp;
+  int i, nnhc, step;
+
+  if ( (fp = fopen(simParams->tNHCFile, "r")) == NULL ) {
+    iout << "Cannot read " << simParams->tNHCFile << "\n";
+    return;
+  }
+  fscanf(fp, "%d%d", &nnhc, &step);
+  if ( nnhc != simParams->tNHCLen ) {
+    iout << "Error: NH-chain length mismatch " << nnhc
+         << " vs. " << simParams->tNHCLen << "\n";
+    return;
+  }
+  for ( i = 0; i < nnhc; i++ )
+    fscanf(fp, "%lf", &tNHCzeta[i]);
+  for ( i = 0; i < nnhc; i++ )
+    fscanf(fp, "%lf", &tNHCmass[i]);
+  fclose(fp);
 }
 
 static char *FORMAT(BigReal X)

@@ -327,6 +327,7 @@ void Sequencer::integrate(int scriptTask) {
       rescaleVelocities(step);
       tcoupleVelocities(timestep,step);
       langRescaleVelocities(step);
+      tNHCRescaleVelocities(step);
       berendsenPressure(step);
 
       if ( ! commOnly ) {
@@ -1300,9 +1301,19 @@ void Sequencer::langRescaleVelocities(int step)
     && (  simParams->langRescaleFreq > 0 
        && step % simParams->langRescaleFreq == 0 ) ) {
     FullAtom *a = patch->atom.begin();
-    BigReal coefficient = broadcast->langRescaleCoefficient.get(step);
+    BigReal factor = broadcast->langRescaleFactor.get(step);
     for ( int i = 0; i < patch->numAtoms; ++i )
-      a[i].velocity *= coefficient;
+      a[i].velocity *= factor;
+  }
+}
+
+void Sequencer::tNHCRescaleVelocities(int step)
+{
+  if ( simParams->tNHCOn ) {
+    FullAtom *a = patch->atom.begin();
+    BigReal factor = broadcast->tNHCRescaleFactor.get(step);
+    for ( int i = 0; i < patch->numAtoms; ++i )
+      a[i].velocity *= factor;
   }
 }
 
