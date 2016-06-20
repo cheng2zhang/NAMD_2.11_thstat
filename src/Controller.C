@@ -1111,25 +1111,32 @@ void Controller::tcoupleVelocities(int step)
   }
 }
 
-// (JCP 126, 014101)
+// Ref.: Canonical sampling through velocity rescaling
+// Bussi, Donadio, and Parrinello, JCP 126, 014101 (2007)
 void Controller::langRescaleVelocities(int step)
 {
-  if ( simParams->langRescaleOn ) {
+  if ( simParams->langRescaleOn
+    && (  simParams->langRescaleFreq > 0 
+       && step % simParams->langRescaleFreq == 0 )  ) {
     BigReal tp = simParams->langRescaleTemp;
+    // use the temperature from adaptive tempering, if any
     if ( simParams->adaptTempOn && simParams->adaptTempRescale
      && (step > simParams->adaptTempFirstStep )
      && (!(simParams->adaptTempLastStep > 0) || step < simParams->adaptTempLastStep )) {
       tp = adaptTempT;
     }
-    BigReal dt = simParams->dt * simParams->langRescaleVisc;
+    tp *= BOLTZMANN;
+    BigReal dt = simParams->langRescaleFreq * simParams->dt / simParams->langRescaleDt;
     BigReal c = exp(-dt);
     BigReal r = random->gaussian();
     BigReal r2 = random->chisqr(numDegFreedom - 1);
-    BigReal ek1 = kineticEnergy; // Halfstep, Centered? 
-    BigReal ek2 = ek1 + (1 - c) * ((r2 + r * r) * tp / 2 - ek1)
-        + 2 * r * sqrt(c * (1 - c) * ek1 * tp / 2);
+    BigReal ek1 = BOLTZMANN * temperature * numDegFreedom / 2;
+    BigReal ek2 = ek1 + (1 - c) * ((r2 + r * r) * tp / 2 - ek1);
+                + 2 * r * sqrt(c * (1 - c) * ek1 * tp / 2);
     if ( ek2 < 0 ) ek2 = 0;
     BigReal coefficient = sqrt(ek2 / ek1);
+    //CkPrintf("Controller step %d, freq %d, dt %g/%g, tp %g, c %g, coef %g r2 + r*r %g, %d, ek %g(%g) -> %g(%g)\n",
+    //    step, simParams->langRescaleFreq, simParams->dt, dt, tp, c, coefficient, r2 + r*r, numDegFreedom, ek1, 2*ek1/numDegFreedom/BOLTZMANN, ek2, 2*ek2/numDegFreedom/BOLTZMANN);
     broadcast->langRescaleCoefficient.publish(step,coefficient);
   }
 }

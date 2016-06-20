@@ -326,6 +326,7 @@ void Sequencer::integrate(int scriptTask) {
     {
       rescaleVelocities(step);
       tcoupleVelocities(timestep,step);
+      langRescaleVelocities(step);
       berendsenPressure(step);
 
       if ( ! commOnly ) {
@@ -1293,15 +1294,14 @@ void Sequencer::tcoupleVelocities(BigReal dt_fs, int step)
   }
 }
 
-void Sequencer::langRescaleVelocities(BigReal dt, int step)
+void Sequencer::langRescaleVelocities(int step)
 {
-  if ( simParams->langRescaleOn )
-  {
+  if ( simParams->langRescaleOn 
+    && (  simParams->langRescaleFreq > 0 
+       && step % simParams->langRescaleFreq == 0 ) ) {
     FullAtom *a = patch->atom.begin();
-    int numAtoms = patch->numAtoms;
     BigReal coefficient = broadcast->langRescaleCoefficient.get(step);
-    Molecule *molecule = Node::Object()->molecule;
-    for ( int i = 0; i < numAtoms; ++i )
+    for ( int i = 0; i < patch->numAtoms; ++i )
       a[i].velocity *= coefficient;
   }
 }

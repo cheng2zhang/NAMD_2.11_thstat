@@ -1187,9 +1187,12 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
     &langRescaleTemp);
    opts.range("langRescaleTemp", NOT_NEGATIVE);
    opts.units("langRescaleTemp", N_KELVIN);
-   opts.optional("langrescale", "langRescaleVisc",
-    "Viscosity for Langevin velocity-rescaling thermostat",
-    &langRescaleVisc, 50);
+   opts.optional("langrescale", "langRescaleDt",
+    "Effective time step in femtoseconds for Langevin velocity-rescaling thermostat",
+    &langRescaleDt, 100.0);
+   opts.optional("main", "langRescaleFreq", "Number of steps between "
+    "Langevin velocity rescaling steps", &langRescaleFreq, 1);
+   opts.range("langRescaleFreq", POSITIVE);
 
    opts.optional("main", "rescaleFreq", "Number of steps between "
     "velocity rescaling", &rescaleFreq);

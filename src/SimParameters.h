@@ -500,7 +500,8 @@ public:
 	Bool langRescaleOn;		//  Flag TRUE-> Langevin velocity-rescaling
 					//  thermostat active
 	BigReal langRescaleTemp;	//  Temperature for Langevin velocity-rescaling thermostat
-	BigReal langRescaleVisc;	//  Viscosity for Langevin velocity-rescaling thermostat
+	BigReal langRescaleDt;	        //  Effective time step in fs for Langevin velocity-rescaling thermostat
+	int langRescaleFreq;	        //  number of MD steps between two Langevin velocity-rescaling steps
 
 	int rescaleFreq;		//  Velocity rescale frequency
 	BigReal rescaleTemp;		//  Temperature to rescale to
