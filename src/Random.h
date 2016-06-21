@@ -172,7 +172,7 @@ public:
     return x;
   }
 
-  BigReal chisqr(double k)
+  BigReal chisqr(BigReal k)
   {
     return gamma( k * 0.5 ) * 2;
   }
