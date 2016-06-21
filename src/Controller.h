@@ -155,12 +155,14 @@ protected:
       int rescaleVelocities_numTemps;
     void reassignVelocities(int);
     void tcoupleVelocities(int);
-    void langRescaleVelocities(int);
+    void langRescaleVelocities(int, Bool);
+    BigReal langRescaleFactorPrev;
     void tNHCInit(void);
     void tNHCDone(int);
-    void tNHCRescaleVelocities(int, BigReal);
+    void tNHCRescaleVelocities(int, Bool);
     void tNHCSave(int);
     void tNHCLoad(void);
+    BigReal tNHCRescaleFactorPrev;
     BigReal *tNHCzeta;
     BigReal *tNHCmass;
     void berendsenPressure(int);

@@ -406,6 +406,7 @@ void Controller::integrate(int scriptTask) {
       slowFreq = simParams->nonbondedFrequency;
     if ( step >= numberOfSteps ) slowFreq = nbondFreq = 1;
 
+    langRescaleFactorPrev = 1;
     tNHCInit();
 
   if ( scriptTask == SCRIPT_RUN ) {
@@ -417,6 +418,9 @@ void Controller::integrate(int scriptTask) {
     receivePressure(step);
     if ( zeroMomentum && dofull && ! (step % slowFreq) )
 						correctMomentum(step);
+    langRescaleVelocities(step, TRUE);
+    tNHCRescaleVelocities(step, TRUE);
+
     printFepMessage(step);
     printTiMessage(step);
     printDynamicsEnergies(step);
@@ -432,6 +436,7 @@ void Controller::integrate(int scriptTask) {
 
   }
 
+  //CkPrintf("%g %g\n", langRescaleFactorPrev, tNHCRescaleFactorPrev);getchar();
     // Handling SIGINT doesn't seem to be working on Lemieux, and it
     // sometimes causes the net-xxx versions of NAMD to segfault on exit, 
     // so disable it for now.
@@ -442,8 +447,8 @@ void Controller::integrate(int scriptTask) {
         adaptTempUpdate(step);
         rescaleVelocities(step);
 	tcoupleVelocities(step);
-	langRescaleVelocities(step);
-	tNHCRescaleVelocities(step, simParams->dt);
+	langRescaleVelocities(step, FALSE);
+	tNHCRescaleVelocities(step, FALSE);
 	berendsenPressure(step);
 	langevinPiston1(step);
         rescaleaccelMD(step);
@@ -453,6 +458,9 @@ void Controller::integrate(int scriptTask) {
 						correctMomentum(step);
 	langevinPiston2(step);
         reassignVelocities(step);
+	
+        langRescaleVelocities(step, TRUE);
+	tNHCRescaleVelocities(step, TRUE);
         printDynamicsEnergies(step);
         outputFepEnergy(step);
         outputTiEnergy(step);
@@ -1118,7 +1126,7 @@ void Controller::tcoupleVelocities(int step)
 
 // Ref.: Canonical sampling through velocity rescaling
 // Bussi, Donadio, and Parrinello, JCP 126, 014101 (2007)
-void Controller::langRescaleVelocities(int step)
+void Controller::langRescaleVelocities(int step, Bool isPrev)
 {
   if ( simParams->langRescaleOn
     && (  simParams->langRescaleFreq > 0 
@@ -1132,17 +1140,26 @@ void Controller::langRescaleVelocities(int step)
     }
     tp *= BOLTZMANN;
     BigReal dt = simParams->langRescaleFreq * simParams->dt / simParams->langRescaleDt;
+    dt *= 0.5; // two half steps
     BigReal c = exp(-dt);
+    BigReal factor;
+
+    // integrate two half steps 
     BigReal r = random->gaussian();
     BigReal r2 = random->chisqr(numDegFreedom - 1);
     BigReal ek1 = BOLTZMANN * temperature * numDegFreedom / 2;
     BigReal ek2 = ek1 + (1 - c) * ((r2 + r * r) * tp / 2 - ek1);
                 + 2 * r * sqrt(c * (1 - c) * ek1 * tp / 2);
     if ( ek2 < 0 ) ek2 = 0;
-    BigReal factor = sqrt(ek2 / ek1);
+    factor = sqrt( ek2 / ek1 );
     //CkPrintf("Controller step %d, freq %d, dt %g/%g, tp %g/%g, c %g, fac %g r2 + r*r %g, %d, ek %g(%g) -> %g(%g)\n",
     //    step, simParams->langRescaleFreq, simParams->dt, dt, tp, tp/BOLTZMANN, c, factor, r2 + r*r, numDegFreedom, ek1, 2*ek1/numDegFreedom/BOLTZMANN, ek2, 2*ek2/numDegFreedom/BOLTZMANN);
-    broadcast->langRescaleFactor.publish(step,factor);
+    if ( !isPrev ) {
+      broadcast->langRescaleFactor.publish(step, factor * langRescaleFactorPrev);
+    } else {
+      langRescaleFactorPrev = factor;
+      temperature *= factor * factor;
+    }
   }
 }
 
@@ -1167,6 +1184,8 @@ void Controller::tNHCInit(void)
   tNHCLoad();
   for ( i = 0; i < nnhc; i++ )
     CkPrintf("NHC %d: zeta %g, mass %g\n", i+1, tNHCzeta[i], tNHCmass[i]);
+
+  tNHCRescaleFactorPrev = 1.0;
 }
 
 void Controller::tNHCDone(int step)
@@ -1180,7 +1199,7 @@ void Controller::tNHCDone(int step)
 
 // Nose-Hoover thermostat
 // TODO: Trotter version
-void Controller::tNHCRescaleVelocities(int step, BigReal dt)
+void Controller::tNHCRescaleVelocities(int step, Bool isPrev)
 {
   if ( simParams->tNHCOn ) {
     BigReal tp = simParams->tNHCTemp;
@@ -1192,8 +1211,10 @@ void Controller::tNHCRescaleVelocities(int step, BigReal dt)
     }
     tp *= BOLTZMANN;
 
-    int nnhc = simParams->tNHCLen, j, i;
-    BigReal s, GQ, mvv;
+    Real dt = simParams->dt * 0.5; // only for half step
+
+    int nnhc = simParams->tNHCLen, i, j, k;
+    BigReal s, GQ, mvv, factor;
 
     mvv = BOLTZMANN * temperature * numDegFreedom;
     for ( j = nnhc - 1; j >= 0; j-- ) {
@@ -1208,10 +1229,15 @@ void Controller::tNHCRescaleVelocities(int step, BigReal dt)
     }
 
     // velocity scaling factor
-    BigReal factor = exp( -tNHCzeta[0] * dt );
+    factor = exp( -tNHCzeta[0] * dt );
     //CkPrintf("Controller step %d, dt %g/%g, tp %g/%g, c %g, fac %g r2 + r*r %g, %d, ek %g(%g) -> %g(%g)\n",
     //    step, simParams->dt, dt, tp, tp/BOLTZMANN, c, factor, r2 + r*r, numDegFreedom, ek1, 2*ek1/numDegFreedom/BOLTZMANN, ek2, 2*ek2/numDegFreedom/BOLTZMANN);
-    broadcast->tNHCRescaleFactor.publish(step,factor);
+    if ( !isPrev ) {
+      broadcast->tNHCRescaleFactor.publish(step, factor * tNHCRescaleFactorPrev);
+    } else {
+      tNHCRescaleFactorPrev = factor;
+      temperature *= factor * factor;
+    }
 
     mvv *= factor * factor;
 
