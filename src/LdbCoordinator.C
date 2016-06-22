@@ -615,6 +615,9 @@ void LdbCoordinator::barrier(void)
        || (nComputesReported != nComputesExpected)
        || (controllerReported != controllerExpected) )
   {
+    CkPrintf("nPatches %d vs %d\n", nPatchesReported, nPatchesExpected);
+    CkPrintf("nComputes %d vs %d\n", nComputesReported, nComputesExpected);
+    CkPrintf("controller %d vs %d\n", controllerReported, controllerExpected);
     NAMD_bug("Load balancer received wrong number of events.\n");
   }
 
