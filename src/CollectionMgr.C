@@ -305,6 +305,17 @@ void CollectionMgr::submitForces(int seq, FullAtomList &a, int maxForceUsed, For
 }
 #endif
 
+void CollectionMgr::submitHi(int seq) {  
+  CollectHiInstance *c;
+  if ( ( c = hi.submitData(seq) ) ) {
+    CollectHiMsg *msg = new CollectHiMsg;
+    msg->seq = c->seq;
+    CProxy_CollectionMaster cm(master);
+    cm.receiveHi(msg);
+    c->free();
+  }
+}
+
 void CollectionMgr::sendDataStream(const char *data) {
   DataStreamMsg *msg = new DataStreamMsg;
   msg->data.resize(strlen(data)+1);

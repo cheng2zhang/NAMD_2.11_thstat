@@ -35,6 +35,13 @@ public:
   FloatVector *fdata;
 };
 
+class CollectHiMsg : public CMessage_CollectHiMsg
+{
+public:
+  int seq;
+};
+
+
 class DataStreamMsg;
 
 class CollectionMaster : public Chare
@@ -297,6 +304,81 @@ public:
 
   };
 #endif
+
+  class CollectHiInstance
+  {
+  public:
+    CollectHiInstance(void) : seq(-10) { ; }
+    CollectHiInstance(int s) { reset(s); }
+
+    void free() { seq = -10; }
+    int notfree() { return ( seq != -10 ); }
+    void reset(int s) {
+        seq = s;
+        remaining = (PatchMap::Object())->numNodesWithPatches(); 
+    }
+    void append(CollectHiMsg *msg) { --remaining; }
+    int ready(void) { return ( ! remaining ); }
+    int seq;
+  private:
+    int remaining;
+  };
+
+  class CollectHiSequence
+  {
+  public:
+
+    void submitData(CollectHiMsg *msg)
+    {
+      int seq = msg->seq;
+      CollectHiInstance **c = data.begin();
+      CollectHiInstance **c_e = data.end();
+      for( ; c != c_e && (*c)->seq != seq; ++c );
+      if ( c == c_e )
+      {
+        c = data.begin();
+        for( ; c != c_e && (*c)->notfree(); ++c );
+        if ( c == c_e ) {
+          data.add(new CollectHiInstance(seq));
+          c = data.end() - 1;
+        }
+        (*c)->reset(seq);
+      }
+      (*c)->append(msg);
+    }
+
+    void enqueue(int seq) {
+      queue.add(seq);
+    }
+
+    CollectHiInstance* removeReady(void) {
+      CollectHiInstance *o = 0;
+      if ( queue.size() ) {
+        int size = queue.size();
+        int seq = queue[0];
+        CollectHiInstance **c = data.begin();
+        CollectHiInstance **c_e = data.end();
+        for( ; c != c_e && (*c)->seq != seq; ++c );
+        if ( c != c_e && (*c)->ready() ) {
+	  o = *c;
+	  queue.del(0,1);
+        }
+        CkPrintf("CollectHi Master seq %d, removeReady() queue size %d\n", seq, size);
+      }
+      return o;
+    }
+
+    CollectHiSequence() { ; }
+    
+    ResizeArray<CollectHiInstance*> data;
+    ResizeArray<int> queue;
+  };
+
+public:
+  void receiveHi(CollectHiMsg *msg);
+  void enqueueHi(int seq);
+  void disposeHi(CollectHiInstance *c);
+
 private:
 
   CollectVectorSequence positions;
@@ -304,6 +386,8 @@ private:
   CollectVectorSequence forces;
   int posTimings, velTimings, forceTimings;
   FILE *dataStreamFile;
+  CollectHiSequence hi;
+  CthThread hiThread;
 
 #ifdef MEM_OPT_VERSION
   int wrapCoorDoneCnt;

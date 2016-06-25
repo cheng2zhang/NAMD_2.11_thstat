@@ -11,6 +11,8 @@ module CollectionMaster {
     FloatVector fdata[];
   };
 
+  message CollectHiMsg;
+
   message [packed] DataStreamMsg;
 
   message CollectVectorVarMsg{
@@ -35,6 +37,7 @@ module CollectionMaster {
     entry void startNextRoundOutputForce(double totalT);
     entry void wrapCoorFinished();
     
+    entry void receiveHi(CollectHiMsg *);
   };
 }
 

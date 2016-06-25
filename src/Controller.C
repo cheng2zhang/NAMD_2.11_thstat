@@ -460,12 +460,13 @@ void Controller::integrate(int scriptTask) {
 	
         langRescaleVelocities(step, TRUE);
 	tNHCRescaleVelocities(step, TRUE);
-        //CkPrintf("### step %d, Controller before adaptTemp, temperature %g\n", step, temperature);
         adaptTempUpdate(step);
-        //CkPrintf("### step %d, Controller after  adaptTemp, temperature %g\n", step, temperature);
+        collection->enqueueHi(step);
         printDynamicsEnergies(step);
         outputFepEnergy(step);
         outputTiEnergy(step);
+        //tpcnt += 1;
+        //tpsum += temperature;
         if(traceIsOn()){
             traceUserEvent(eventEndOfTimeStep);
             sprintf(traceNote, "s:%d", step);
@@ -509,7 +510,7 @@ void Controller::integrate(int scriptTask) {
 	}
 #endif
 	 
-        //CkPrintf("step %d\n", step);
+        CkPrintf("step %d, before rebalanceLoad(), Controller PE %d/%d\n", step, CkMyPe(), CkNumPes());
         rebalanceLoad(step);
 
 #if  PME_BARRIER
@@ -519,6 +520,7 @@ void Controller::integrate(int scriptTask) {
     // signal(SIGINT, oldhandler);
     
     tNHCDone(step);
+    //CkPrintf("tp ave. %g\n", tpsum/tpcnt);
 }
 
 
@@ -1161,6 +1163,7 @@ void Controller::langRescaleVelocities(int step, Bool isPrev)
     if ( !isPrev ) {
       broadcast->langRescaleFactor.publish(step, factor * langRescaleFactorPrev);
     } else {
+      // save it for the scaling in the next step
       langRescaleFactorPrev = factor;
     }
     temperature *= fac2;
@@ -2203,17 +2206,18 @@ void Controller::adaptTempUpdate(int step, int minimize)
         langRescaleFactorPrev *= vScale;
       } else if ( simParams->tNHCOn ) {
         tNHCRescaleFactorPrev *= vScale;
-      } else {
-        broadcast->adaptTempScale.publish(step, vScale);
       }
       adaptTempT = dT; 
+      //CkPrintf("### step %d, Controller before adaptTemp, scale %g\n", step, vScale);
       broadcast->adaptTemperature.publish(step,adaptTempT);
+      //CkPrintf("### step %d, Controller after  adaptTemp, scale %g\n", step, vScale);
       // temperature is to be used for the Langevin velocity-rescaling
       // and NH-chain thermostats, so it needs to be updated.
       temperature *= tScale;
       kineticEnergy *= tScale;
       kineticEnergyCentered *= tScale;
       kineticEnergyHalfstep *= tScale;
+
       //CkPrintf("### step %d, Controller within adaptTemp, scale %g\n", step, sqrt(tScale));
     }
     adaptTempWriteRestart(step);
@@ -3380,7 +3384,9 @@ void Controller::rebalanceLoad(int step)
   if ( ! ldbSteps ) { 
     ldbSteps = LdbCoordinator::Object()->getNumStepsToRun();
   }
+  //CkPrintf("Controller: test rebalancing %d, %d\n", step, ldbSteps);
   if ( ! --ldbSteps ) {
+    //CkPrintf("Controller: rebalancing %d\n", step);
     startBenchTime -= CmiWallTimer();
 	Node::Object()->outputPatchComputeMaps("before_ldb", step);
     LdbCoordinator::Object()->rebalance(this);	

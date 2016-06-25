@@ -43,6 +43,38 @@ CollectionMaster::~CollectionMaster(void)
 {
 }
 
+void CollectionMaster::receiveHi(CollectHiMsg *msg)
+{
+  hi.submitData(msg);
+  CkPrintf("receiveHi called seq %d, Pe %d/%d\n", msg->seq, CkMyPe(), CkNumPes());
+  delete msg;
+  CollectHiInstance *c;
+  while ( ( c = hi.removeReady() ) ) { disposeHi(c); }
+  hiThread = CthSelf();
+  CthSuspend();
+}
+
+void CollectionMaster::enqueueHi(int seq)
+{
+  hi.enqueue(seq);
+  CkPrintf("enqueueHi called seq %d, Pe %d/%d\n", seq, CkMyPe(), CkNumPes());
+
+  CollectHiInstance *c;
+  while ( ( c = hi.removeReady() ) ) { disposeHi(c); }
+  hiThread = CthSelf();
+  CthSuspend();
+}
+
+void CollectionMaster::disposeHi(CollectHiInstance *c)
+{
+  CkPrintf("disposeHi seq %d\n", c->seq);
+  c->free();
+  if ( hiThread ) {
+    CthAwaken(hiThread);
+  }
+}
+
+
 void CollectionMaster::receivePositions(CollectVectorMsg *msg)
 {
 #ifndef MEM_OPT_VERSION

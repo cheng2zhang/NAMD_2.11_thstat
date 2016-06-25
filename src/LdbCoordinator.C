@@ -611,13 +611,14 @@ void LdbCoordinator::rebalance(Controller *c)
 
 void LdbCoordinator::barrier(void)
 {
+  if (nPatchesReported != nPatchesExpected) {
+    CkPrintf("Before barrier: nPatches %d vs %d (%d, %d), PE %d/%d\n",
+        nPatchesReported, nPatchesExpected, nLocalPatches, patchMap->numHomePatches(), CkMyPe(), CkNumPes());
+  }
   if ( (nPatchesReported != nPatchesExpected) 
        || (nComputesReported != nComputesExpected)
        || (controllerReported != controllerExpected) )
   {
-    CkPrintf("nPatches %d vs %d\n", nPatchesReported, nPatchesExpected);
-    CkPrintf("nComputes %d vs %d\n", nComputesReported, nComputesExpected);
-    CkPrintf("controller %d vs %d\n", controllerReported, controllerExpected);
     NAMD_bug("Load balancer received wrong number of events.\n");
   }
 

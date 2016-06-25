@@ -443,9 +443,8 @@ void Sequencer::integrate(int scriptTask) {
 	submitReductions(step);
 	submitCollections(step);
        //Update adaptive tempering temperature
-        //CkPrintf("### step %d, Sequencer  before adaptTemp\n", step);
         adaptTempUpdate(step);
-        //CkPrintf("### step %d, Sequencer  after  adaptTemp\n", step);
+        collection->submitHi(step);
 
 #if CYCLE_BARRIER
         cycleBarrier(!((step+1) % stepsPerCycle), step);
@@ -478,6 +477,7 @@ void Sequencer::integrate(int scriptTask) {
             sprintf(traceNote, "%s%d",tracePrefix,step); 
             traceUserSuppliedNote(traceNote);
         }
+        CkPrintf("step %d, before rebalanceLoad(), Sequencer PE %d/%d\n", step, CkMyPe(), CkNumPes());
 	rebalanceLoad(step);
 
 #if PME_BARRIER
@@ -1202,12 +1202,12 @@ void Sequencer::adaptTempUpdate(int step)
    // Get Updated Temperature
    if ( !(step % simParams->adaptTempFreq ) && (step > simParams->firstTimestep ))
    {
-    if ( !simParams->langRescaleOn && !simParams->tNHCOn ) {
-      BigReal vScale = broadcast->adaptTempScale.get(step);
-      rescaleVelocitiesByFactor( vScale );
-    }
+    BigReal adaptTempTOld = adaptTempT;
     adaptTempT = broadcast->adaptTemperature.get(step);
-    //CkPrintf("### step %d, Sequencer  within adaptTemp, scale %g\n", step, vScale);
+    //CkPrintf("### step %d, Sequencer  before adaptTemp, scale %g\n", step, sqrt(adaptTempT/adaptTempTOld));
+    if ( !simParams->langRescaleOn && !simParams->tNHCOn )
+      rescaleVelocitiesByFactor( sqrt(adaptTempT / adaptTempTOld) );
+    //CkPrintf("### step %d, Sequencer  after  adaptTemp, scale %g\n", step, sqrt(adaptTempT/adaptTempTOld));
    }
 }
 
@@ -2160,7 +2160,9 @@ void Sequencer::rebalanceLoad(int timestep) {
   if ( ! ldbSteps ) {
     ldbSteps = LdbCoordinator::Object()->getNumStepsToRun();
   }
+  //CkPrintf("Sequencer : test rebalancing %d, %d\n", timestep, ldbSteps);
   if ( ! --ldbSteps ) {
+    //CkPrintf("Sequencer : rebalancing %d\n", timestep);
     patch->submitLoadStats(timestep);
     ldbCoordinator->rebalance(this,patch->getPatchID());
     pairlistsAreValid = 0;

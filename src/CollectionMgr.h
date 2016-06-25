@@ -138,6 +138,56 @@ public:
     ResizeArray<CollectVectorInstance*> data;
 
   };
+
+
+
+  class CollectHiInstance
+  {
+  public:
+    CollectHiInstance(void) : seq(-10) { ; }
+
+    void free() { seq = -10; }
+    int notfree() { return ( seq != -10 ); }
+
+    void reset(int s) {
+      seq = s;
+      remaining = PatchMap::Object()->numHomePatches();
+    }
+
+    int append(void) {
+      return ( ! --remaining );
+    }
+
+    int seq;
+  private:
+    int remaining;
+  };
+
+  class CollectHiSequence
+  {
+  public:
+    CollectHiInstance* submitData(int seq) {
+      CollectHiInstance **c = data.begin();
+      CollectHiInstance **c_e = data.end();
+      for( ; c != c_e && (*c)->seq != seq; ++c );
+      if ( c == c_e ) {
+       c = data.begin();
+       for( ; c != c_e && (*c)->notfree(); ++c );
+       if ( c == c_e ) {
+	data.add(new CollectHiInstance);
+	c = data.end() - 1;
+       }
+       (*c)->reset(seq);
+      }
+      if ( (*c)->append() ) {
+        return *c;
+      } else {
+        return 0;
+      }
+    }
+    ResizeArray<CollectHiInstance*> data;
+  };
+
 private:
 
   CkChareID master;
@@ -146,6 +196,9 @@ private:
   CollectVectorSequence velocities;
   CollectVectorSequence forces;
 
+  CollectHiSequence hi;
+public:
+  void submitHi(int);
 };
 
 #endif
