@@ -460,8 +460,11 @@ void Controller::integrate(int scriptTask) {
 	
         langRescaleVelocities(step, TRUE);
 	tNHCRescaleVelocities(step, TRUE);
-        adaptTempUpdate(step);
-        collection->enqueueHi(step);
+        Bool scaled = adaptTempUpdate(step);
+        if ( scaled && ldbSteps == 1 ) {
+          // collect Hi's if we're about to rebalance load
+          collection->enqueueHi(step);
+        }
         printDynamicsEnergies(step);
         outputFepEnergy(step);
         outputTiEnergy(step);
@@ -509,8 +512,7 @@ void Controller::integrate(int scriptTask) {
 		}
 	}
 #endif
-	 
-        CkPrintf("step %d, before rebalanceLoad(), Controller PE %d/%d\n", step, CkMyPe(), CkNumPes());
+	if ( ldbSteps == 1 ) CkPrintf("step %d, before rebalanceLoad(), Controller PE %d/%d, thread %p\n", step, CkMyPe(), CkNumPes(), CthSelf());
         rebalanceLoad(step);
 
 #if  PME_BARRIER
@@ -1912,17 +1914,18 @@ void Controller::adaptTempWriteRestart(int step) {
     }
 }    
 
-void Controller::adaptTempUpdate(int step, int minimize)
+Bool Controller::adaptTempUpdate(int step, int minimize)
 {
+    Bool scaled = FALSE;
     //Beta = 1./T
-    if ( !simParams->adaptTempOn ) return;
+    if ( !simParams->adaptTempOn ) return scaled;
     int j = 0;
     if (step == simParams->firstTimestep) {
         adaptTempInit(step);
-        return;
+        return scaled;
     }
     if ( minimize || (step < simParams->adaptTempFirstStep ) || 
-        ( simParams->adaptTempLastStep > 0 && step > simParams->adaptTempLastStep )) return;
+        ( simParams->adaptTempLastStep > 0 && step > simParams->adaptTempLastStep )) return scaled;
     const int adaptTempOutFreq  = simParams->adaptTempOutFreq;
     const bool adaptTempDebug  = simParams->adaptTempDebug;
     //Calculate Current inverse temperature and bin 
@@ -2210,6 +2213,7 @@ void Controller::adaptTempUpdate(int step, int minimize)
       adaptTempT = dT; 
       //CkPrintf("### step %d, Controller before adaptTemp, scale %g\n", step, vScale);
       broadcast->adaptTemperature.publish(step,adaptTempT);
+      scaled = TRUE;
       //CkPrintf("### step %d, Controller after  adaptTemp, scale %g\n", step, vScale);
       // temperature is to be used for the Langevin velocity-rescaling
       // and NH-chain thermostats, so it needs to be updated.
@@ -2229,7 +2233,7 @@ void Controller::adaptTempUpdate(int step, int minimize)
              << " ENERGYVAR " << std::setprecision(10) << potEnergyVariance;
         iout << "\n" << endi;
    }
-   
+   return scaled;
 }
 
 
@@ -3386,7 +3390,7 @@ void Controller::rebalanceLoad(int step)
   }
   //CkPrintf("Controller: test rebalancing %d, %d\n", step, ldbSteps);
   if ( ! --ldbSteps ) {
-    //CkPrintf("Controller: rebalancing %d\n", step);
+    CkPrintf("Controller: rebalancing %d, thread %p\n", step, CthSelf());
     startBenchTime -= CmiWallTimer();
 	Node::Object()->outputPatchComputeMaps("before_ldb", step);
     LdbCoordinator::Object()->rebalance(this);	

@@ -306,12 +306,11 @@ void CollectionMgr::submitForces(int seq, FullAtomList &a, int maxForceUsed, For
 #endif
 
 void CollectionMgr::submitHi(int seq) {  
-  CollectHiInstance *c;
-  if ( ( c = hi.submitData(seq) ) ) {
-    CollectHiMsg *msg = new CollectHiMsg;
-    msg->seq = c->seq;
+  CollectHiInstance *c = hi.submitData(seq);
+  if ( c != 0 ) {
+    // all HomePatches on the Node have submitted data
     CProxy_CollectionMaster cm(master);
-    cm.receiveHi(msg);
+    cm.receiveHi(c->seq);
     c->free();
   }
 }

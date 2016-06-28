@@ -35,13 +35,6 @@ public:
   FloatVector *fdata;
 };
 
-class CollectHiMsg : public CMessage_CollectHiMsg
-{
-public:
-  int seq;
-};
-
-
 class DataStreamMsg;
 
 class CollectionMaster : public Chare
@@ -309,75 +302,56 @@ public:
   {
   public:
     CollectHiInstance(void) : seq(-10) { ; }
-    CollectHiInstance(int s) { reset(s); }
-
     void free() { seq = -10; }
-    int notfree() { return ( seq != -10 ); }
+    int notfree() { return seq != -10; }
     void reset(int s) {
-        seq = s;
-        remaining = (PatchMap::Object())->numNodesWithPatches(); 
+      seq = s;
+      remaining = PatchMap::Object()->numNodesWithPatches(); 
     }
-    void append(CollectHiMsg *msg) { --remaining; }
-    int ready(void) { return ( ! remaining ); }
     int seq;
-  private:
     int remaining;
   };
 
   class CollectHiSequence
   {
   public:
+    ResizeArray<CollectHiInstance *> data;
 
-    void submitData(CollectHiMsg *msg)
-    {
-      int seq = msg->seq;
-      CollectHiInstance **c = data.begin();
-      CollectHiInstance **c_e = data.end();
-      for( ; c != c_e && (*c)->seq != seq; ++c );
-      if ( c == c_e )
-      {
-        c = data.begin();
-        for( ; c != c_e && (*c)->notfree(); ++c );
-        if ( c == c_e ) {
-          data.add(new CollectHiInstance(seq));
+    void submitData(int seq) {
+      CollectHiInstance **c, **c_e = data.end();
+      for( c = data.begin(); c != c_e && (*c)->seq != seq; ++c )
+        ;
+      if ( c == c_e ) { // the sequence does not exist
+        // try to find an empty spot in the array
+        for( c = data.begin(); c != c_e && (*c)->notfree(); ++c )
+          ;
+        if ( c == c_e ) { // no empty spot exists, append one
+          data.add(new CollectHiInstance);
           c = data.end() - 1;
         }
         (*c)->reset(seq);
       }
-      (*c)->append(msg);
+      (*c)->remaining--;
     }
 
-    void enqueue(int seq) {
-      queue.add(seq);
-    }
-
-    CollectHiInstance* removeReady(void) {
-      CollectHiInstance *o = 0;
-      if ( queue.size() ) {
-        int size = queue.size();
-        int seq = queue[0];
-        CollectHiInstance **c = data.begin();
-        CollectHiInstance **c_e = data.end();
-        for( ; c != c_e && (*c)->seq != seq; ++c );
-        if ( c != c_e && (*c)->ready() ) {
-	  o = *c;
-	  queue.del(0,1);
-        }
-        CkPrintf("CollectHi Master seq %d, removeReady() queue size %d\n", seq, size);
-      }
+    // return nonzero if all nodes have submitted data for step `seq'
+    CollectHiInstance* removeReady(int seq) {
+      CollectHiInstance *o = 0, **c, **c_e = data.end();
+      for( c = data.begin(); c != c_e && (*c)->seq != seq; ++c )
+        ;
+      int remaining = 0;
+      if ( c != c_e && (remaining = (*c)->remaining) == 0 )
+        o = *c;
+      CkPrintf("CollectHiInstance seq %d, removeReady() %s, remaining %d, thread %p\n", seq, (o ? "yes" : "no"), remaining, CthSelf());
       return o;
     }
 
     CollectHiSequence() { ; }
-    
-    ResizeArray<CollectHiInstance*> data;
-    ResizeArray<int> queue;
   };
 
 public:
-  void receiveHi(CollectHiMsg *msg);
+  void receiveHi(int seq);
   void enqueueHi(int seq);
-  void disposeHi(CollectHiInstance *c);
 
 private:
 

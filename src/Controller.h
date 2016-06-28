@@ -242,7 +242,7 @@ protected:
 
 //JS for adaptive temperature sampling
    void adaptTempInit(int step);
-   void adaptTempUpdate(int step, int minimize = 0);
+   Bool adaptTempUpdate(int step, int minimize = 0);
    void adaptTempWriteRestart(int step);
    BigReal *adaptTempPotEnergyAveNum;
    BigReal *adaptTempPotEnergyAveDen;

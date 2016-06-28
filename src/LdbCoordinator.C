@@ -611,10 +611,6 @@ void LdbCoordinator::rebalance(Controller *c)
 
 void LdbCoordinator::barrier(void)
 {
-  if (nPatchesReported != nPatchesExpected) {
-    CkPrintf("Before barrier: nPatches %d vs %d (%d, %d), PE %d/%d\n",
-        nPatchesReported, nPatchesExpected, nLocalPatches, patchMap->numHomePatches(), CkMyPe(), CkNumPes());
-  }
   if ( (nPatchesReported != nPatchesExpected) 
        || (nComputesReported != nComputesExpected)
        || (controllerReported != controllerExpected) )

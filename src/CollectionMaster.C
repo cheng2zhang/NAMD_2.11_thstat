@@ -43,37 +43,27 @@ CollectionMaster::~CollectionMaster(void)
 {
 }
 
-void CollectionMaster::receiveHi(CollectHiMsg *msg)
+void CollectionMaster::receiveHi(int seq)
 {
-  hi.submitData(msg);
-  CkPrintf("receiveHi called seq %d, Pe %d/%d\n", msg->seq, CkMyPe(), CkNumPes());
-  delete msg;
-  CollectHiInstance *c;
-  while ( ( c = hi.removeReady() ) ) { disposeHi(c); }
-  hiThread = CthSelf();
-  CthSuspend();
+  hi.submitData(seq);
+  CollectHiInstance *c = hi.removeReady(seq);
+  if ( c != 0 ) { // collected Hi's from all nodes
+    CthAwaken(hiThread);
+    hiThread = 0;
+  }
 }
 
 void CollectionMaster::enqueueHi(int seq)
 {
-  hi.enqueue(seq);
-  CkPrintf("enqueueHi called seq %d, Pe %d/%d\n", seq, CkMyPe(), CkNumPes());
-
-  CollectHiInstance *c;
-  while ( ( c = hi.removeReady() ) ) { disposeHi(c); }
-  hiThread = CthSelf();
-  CthSuspend();
-}
-
-void CollectionMaster::disposeHi(CollectHiInstance *c)
-{
-  CkPrintf("disposeHi seq %d\n", c->seq);
-  c->free();
-  if ( hiThread ) {
-    CthAwaken(hiThread);
+  CollectHiInstance *c = hi.removeReady(seq);
+  if ( c == 0 ) { // lock the thread
+    hiThread = CthSelf();
+    CkPrintf("enqueueHi called seq %d, Pe %d/%d, thread %p\n", seq, CkMyPe(), CkNumPes(), hiThread);
+    CthSuspend();
+  } else { // already collected Hi's from all nodes
+    c->free(); // empty the spot, but don't actually free the memory
   }
 }
-
 
 void CollectionMaster::receivePositions(CollectVectorMsg *msg)
 {
