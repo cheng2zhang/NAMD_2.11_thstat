@@ -176,7 +176,6 @@ protected:
     void keHistLoad(void);
     BigReal *keHist;
     int keHistBinMax;
-    BigReal keHistTemp;
     void berendsenPressure(int);
       // Tensor berendsenPressure_avg;
       // int berendsenPressure_count;

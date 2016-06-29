@@ -342,7 +342,6 @@ public:
       int remaining = 0;
       if ( c != c_e && (remaining = (*c)->remaining) == 0 )
         o = *c;
-      CkPrintf("CollectHiInstance seq %d, removeReady() %s, remaining %d, thread %p\n", seq, (o ? "yes" : "no"), remaining, CthSelf());
       return o;
     }
 

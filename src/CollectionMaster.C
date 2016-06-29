@@ -58,7 +58,6 @@ void CollectionMaster::enqueueHi(int seq)
   CollectHiInstance *c = hi.removeReady(seq);
   if ( c == 0 ) { // lock the thread
     hiThread = CthSelf();
-    CkPrintf("enqueueHi called seq %d, Pe %d/%d, thread %p\n", seq, CkMyPe(), CkNumPes(), hiThread);
     CthSuspend();
   } else { // already collected Hi's from all nodes
     c->free(); // empty the spot, but don't actually free the memory

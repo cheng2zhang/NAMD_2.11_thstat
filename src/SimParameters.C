@@ -1220,9 +1220,9 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
        &keHistBin, 1.0);
    opts.optional("keHist", "keHistFile", "Histogram file for the kinetic energy",
        keHistFile);
-   opts.optional("keHist", "keHistFreq", "Frequency of writing the histogram file for the kinetic energy",
-       &keHistFreq, 10000);
-   opts.range("keHistFreq", POSITIVE);
+   opts.optional("keHist", "keHistFileFreq", "Frequency of writing the histogram file for the kinetic energy",
+       &keHistFileFreq, 10000);
+   opts.range("keHistFileFreq", POSITIVE);
 
    opts.optional("main", "rescaleFreq", "Number of steps between "
     "velocity rescaling", &rescaleFreq);
@@ -3113,6 +3113,9 @@ void SimParameters::check_config(ParseOptions &opts, ConfigList *config, char *&
                                              opts.defined("adaptTempTmax") &&
                                              adaptTempBins != 0 ))  
         NAMD_die("Need to specify either adaptTempInFile or all of {adaptTempTmin, adaptTempTmax,adaptTempBins} if adaptTempMD is on.");
+     if ( rescaleFreq > 0 )
+       iout << iWARN << "Velocity rescaling does not sample the exact Boltzmann distribution "
+	 "and adaptive tempering will not work properly\n" << endi;
    }
    if (langevinOn) {
      if ( ! opts.defined("langevinDamping") ) langevinDamping = 0.0;

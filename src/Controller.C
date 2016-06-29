@@ -1279,7 +1279,7 @@ void Controller::tNHCSave(int step)
   int i, nnhc = simParams->tNHCLen;
 
   if ( (fp = fopen(simParams->tNHCFile, "w")) == NULL ) {
-    iout << "Error: cannot write " << simParams->tNHCFile << "\n";
+    iout << "Error: cannot write " << simParams->tNHCFile << "\n" << endi;
     return;
   }
   fprintf(fp, "%d %d\n", nnhc, step);
@@ -1300,13 +1300,13 @@ void Controller::tNHCLoad(void)
   int i, nnhc, step;
 
   if ( (fp = fopen(simParams->tNHCFile, "r")) == NULL ) {
-    iout << "Cannot read " << simParams->tNHCFile << "\n";
+    iout << "Cannot read " << simParams->tNHCFile << "\n" << endi;
     return;
   }
   fscanf(fp, "%d%d", &nnhc, &step);
   if ( nnhc != simParams->tNHCLen ) {
     iout << "Error: NH-chain length mismatch " << nnhc
-         << " vs. " << simParams->tNHCLen << "\n";
+         << " vs. " << simParams->tNHCLen << "\n" << endi;
     return;
   }
   for ( i = 0; i < nnhc; i++ )
@@ -1322,8 +1322,7 @@ void Controller::tNHCLoad(void)
 
 void Controller::keHistInit(void)
 {
-  keHistTemp = simParams->thermostatTemp();
-  if ( keHistTemp < 0 ) keHistTemp = 300;
+  BigReal keHistTemp = simParams->thermostatTemp();
   BigReal ke = BOLTZMANN * keHistTemp * numDegFreedom / 2;
   keHistBinMax = (int) (5.0 * ke / simParams->keHistBin);
   CkPrintf("keHistInit: temperature %g, dof %d, keHistBinMax %d\n", keHistTemp, numDegFreedom, keHistBinMax);
@@ -1336,9 +1335,12 @@ void Controller::keHistInit(void)
 void Controller::keHistUpdate(int step)
 {
   BigReal ke = BOLTZMANN * temperature * numDegFreedom / 2;
+  if ( simParams->adaptTempOn ) {
+    ke *= simParams->thermostatTemp() / adaptTempT;
+  }
   int i = (int) ( ke / simParams->keHistBin );
   if ( i < keHistBinMax ) keHist[i] += 1;
-  if ( step > 0 && step % simParams->keHistFreq == 0 ) {
+  if ( step > 0 && step % simParams->keHistFileFreq == 0 ) {
     keHistSave(step);
   }
 }
@@ -1357,14 +1359,14 @@ void Controller::keHistSave(int step)
   BigReal norm = (numDegFreedom % 2) ? 0.5 * log(M_PI) : 0;
   for ( i = 2 - numDegFreedom % 2; i < numDegFreedom; i += 2 )
     norm += log(i*0.5);
-  BigReal tp = keHistTemp * BOLTZMANN;
+  BigReal tp = simParams->thermostatTemp() * BOLTZMANN;
   BigReal dk = simParams->keHistBin;
   for ( i = 0; i < keHistBinMax; i++ ) {
     if ( keHist[i] <= 0 ) continue;
     double hist = keHist[i] / ( dk * tot );
     double ke = (i + 0.5) * dk;
     double histref = exp(log(ke/tp) * (numDegFreedom*0.5-1) -ke/tp - norm) / tp;
-    fprintf(fp, "%g %g %g %g\n", (i + 0.5) * dk, hist, histref, keHist[i]);
+    fprintf(fp, "%g\t%g\t%g\t%g\n", (i + 0.5) * dk, hist, histref, keHist[i]);
   }
   fclose(fp);
 }
@@ -1383,6 +1385,8 @@ void Controller::keHistLoad(void)
     keHist[i] = hist;
   }
   fclose(fp);
+  iout << "Loaded previous histogram from "
+       << simParams->keHistFile << ".\n" << endi;
 }
 
 void Controller::keHistDone(int step)
@@ -1991,11 +1995,6 @@ Bool Controller::adaptTempUpdate(int step, int minimize)
     //Calculate Current inverse temperature and bin 
     BigReal adaptTempBeta = 1./adaptTempT;
     adaptTempBin   = (int)floor((adaptTempBeta - adaptTempBetaMin)/adaptTempDBeta);
-    if ( adaptTempBin < 0 ) {
-      adaptTempBin = 0;
-    } else if ( adaptTempBin >= adaptTempBins ) {
-      adaptTempBin = adaptTempBins - 1;
-    }
 
     if (adaptTempBin < 0 || adaptTempBin > adaptTempBins)
         iout << iWARN << " adaptTempBin out of range: adaptTempBin: " << adaptTempBin  
@@ -2003,6 +2002,11 @@ Bool Controller::adaptTempUpdate(int step, int minimize)
                               << " adaptTempDBeta: " << adaptTempDBeta 
                                << " betaMin:" << adaptTempBetaMin 
                                << " betaMax: " << adaptTempBetaMax << "\n";
+    if ( adaptTempBin < 0 ) {
+      adaptTempBin = 0;
+    } else if ( adaptTempBin >= adaptTempBins ) {
+      adaptTempBin = adaptTempBins - 1;
+    }
     adaptTempPotEnergySamples[adaptTempBin] += 1;
     BigReal gammaAve = 1.-adaptTempCg/adaptTempPotEnergySamples[adaptTempBin];
 
