@@ -165,6 +165,18 @@ protected:
     BigReal tNHCRescaleFactorPrev;
     BigReal *tNHCzeta;
     BigReal *tNHCmass;
+    void keHistInit(void);
+    void keHistDone(int);
+    void keHistUpdate(int);
+    // save the kinetic energy to file
+    // the first column is the kinetic energy
+    // the second and third columns are the
+    // normalized histogram and the reference value
+    void keHistSave(int);
+    void keHistLoad(void);
+    BigReal *keHist;
+    int keHistBinMax;
+    BigReal keHistTemp;
     void berendsenPressure(int);
       // Tensor berendsenPressure_avg;
       // int berendsenPressure_count;

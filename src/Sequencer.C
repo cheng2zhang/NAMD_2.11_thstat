@@ -223,15 +223,7 @@ void Sequencer::integrate(int scriptTask) {
 
     // Is adaptive tempering on?
     const Bool adaptTempOn = simParams->adaptTempOn;
-    adaptTempT = simParams->initialTemp;
-    if (simParams->langevinOn)
-        adaptTempT = simParams->langevinTemp;
-    else if (simParams->rescaleFreq > 0)
-        adaptTempT = simParams->rescaleTemp;
-    else if (simParams->langRescaleOn)
-        adaptTempT = simParams->langRescaleTemp;
-    else if (simParams->tNHCOn)
-        adaptTempT = simParams->tNHCTemp;
+    adaptTempT = simParams->thermostatTemp();
 
     int &doMolly = patch->flags.doMolly;
     doMolly = simParams->mollyOn && doFullElectrostatics;
@@ -481,7 +473,7 @@ void Sequencer::integrate(int scriptTask) {
             sprintf(traceNote, "%s%d",tracePrefix,step); 
             traceUserSuppliedNote(traceNote);
         }
-        if ( ldbSteps == 1 ) CkPrintf("step %d, before rebalanceLoad(), Sequencer PE %d/%d, thread %p\n", step, CkMyPe(), CkNumPes(), CthSelf());
+        //if ( ldbSteps == 1 ) CkPrintf("step %d, before rebalanceLoad(), Sequencer PE %d/%d, thread %p\n", step, CkMyPe(), CkNumPes(), CthSelf());
 	rebalanceLoad(step);
 
 #if PME_BARRIER
@@ -1201,8 +1193,8 @@ Bool Sequencer::adaptTempUpdate(int step)
    if (!simParams->adaptTempOn) return scaled;
    if ( (step < simParams->adaptTempFirstStep ) || 
      ( simParams->adaptTempLastStep > 0 && step > simParams->adaptTempLastStep )) {
-        if (simParams->langevinOn) // restore langevin temperature
-            adaptTempT = simParams->langevinTemp;
+        // restore the temperature of the active thermostat
+        adaptTempT = simParams->thermostatTemp();
         return scaled;
    }
    // Get Updated Temperature
@@ -1211,10 +1203,8 @@ Bool Sequencer::adaptTempUpdate(int step)
     BigReal adaptTempTOld = adaptTempT;
     adaptTempT = broadcast->adaptTemperature.get(step);
     scaled = TRUE;
-    //CkPrintf("### step %d, Sequencer  before adaptTemp, scale %g\n", step, sqrt(adaptTempT/adaptTempTOld));
     if ( !simParams->langRescaleOn && !simParams->tNHCOn )
       rescaleVelocitiesByFactor( sqrt(adaptTempT / adaptTempTOld) );
-    //CkPrintf("### step %d, Sequencer  after  adaptTemp, scale %g\n", step, sqrt(adaptTempT/adaptTempTOld));
    }
    return scaled;
 }
@@ -2168,9 +2158,8 @@ void Sequencer::rebalanceLoad(int timestep) {
   if ( ! ldbSteps ) {
     ldbSteps = LdbCoordinator::Object()->getNumStepsToRun();
   }
-  //CkPrintf("Sequencer : test rebalancing %d, %d\n", timestep, ldbSteps);
   if ( ! --ldbSteps ) {
-    CkPrintf("Sequencer : rebalancing %d, thread %p\n", timestep, CthSelf());
+    //CkPrintf("Sequencer : rebalancing %d, thread %p\n", timestep, CthSelf());
     patch->submitLoadStats(timestep);
     ldbCoordinator->rebalance(this,patch->getPatchID());
     pairlistsAreValid = 0;

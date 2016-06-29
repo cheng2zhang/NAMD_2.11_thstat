@@ -1214,6 +1214,16 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
    opts.optionalB("tNHC", "tNHCFileReadMass", "Read mass from the restart file, if any",
        &tNHCFileReadMass, FALSE);
 
+   opts.optionalB("main", "keHist", "Should kinetic energy histogram be turned on?",
+       &keHistOn, FALSE);
+   opts.optional("keHist", "keHistBin", "Bin size of the histogram of the kinetic energy",
+       &keHistBin, 1.0);
+   opts.optional("keHist", "keHistFile", "Histogram file for the kinetic energy",
+       keHistFile);
+   opts.optional("keHist", "keHistFreq", "Frequency of writing the histogram file for the kinetic energy",
+       &keHistFreq, 10000);
+   opts.range("keHistFreq", POSITIVE);
+
    opts.optional("main", "rescaleFreq", "Number of steps between "
     "velocity rescaling", &rescaleFreq);
    opts.range("rescaleFreq", POSITIVE);
@@ -2210,6 +2220,22 @@ void SimParameters::readExtendedSystem(const char *filename, Lattice *latptr) {
      latptr->set(cellBasisVector1,cellBasisVector2,cellBasisVector3,cellOrigin);
    }
 
+}
+
+// return the temperature of the active thermostat
+BigReal SimParameters::thermostatTemp(void)
+{
+  if ( langRescaleOn ) {
+    return langRescaleTemp;
+  } else if ( tNHCOn ) {
+    return tNHCTemp;
+  } else if ( langevinOn ) {
+    return langevinTemp;
+  } else if ( rescaleFreq > 0 ) {
+    return rescaleTemp;
+  } else {
+    return initialTemp;
+  }
 }
 
 #ifdef MEM_OPT_VERSION
