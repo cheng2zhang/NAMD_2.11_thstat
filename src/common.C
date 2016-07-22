@@ -181,7 +181,7 @@ int NAMD_open_text(const char *fname, int append) {
   int fd;
 
   //  open the file and die if the open fails
-#ifdef WIN32
+#if defined(WIN32) && !defined(__CYGWIN__)
   while ( (fd = _open(fname, O_WRONLY|(append?O_APPEND:O_EXCL)|O_CREAT|O_TEXT,_S_IREAD|_S_IWRITE)) < 0) {
 #else
 #ifdef NAMD_NO_O_EXCL
@@ -223,7 +223,7 @@ void NAMD_write(int fd, const char *buf, size_t count, const char *fname) {
 
 // same as close, only does error checking internally
 void NAMD_close(int fd, const char *fname) {
-#ifdef WIN32
+#if defined(WIN32) && !defined(__CYGWIN__)
   while ( _close(fd) ) {
 #else
   while ( close(fd) ) {
