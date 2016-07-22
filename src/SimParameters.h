@@ -547,6 +547,7 @@ public:
         BigReal adaptTempTmax;                 //  Upper temperature bound
         BigReal adaptTempAutoDt;               //  Auto jump size. Value determines upper bound, adaotTempDt determines lower bound 
         int adaptTempBins;                     //  Number of bins to store average energy values
+        BigReal adaptTempWindowSize;           //  Window size as a fraction of the inverse temperature range
         BigReal adaptTempDt;                   //  timestep for adaptTemp updates - only affects Temperature random walk
         BigReal adaptTempCgamma;               //  Cgamma variable for adaptive bin averaging Cgamma = 0 is normal Averaging. 1 > Cgamma >= 0
         Bool adaptTempLangevin;                //  Couple to Langevin Thermostat
@@ -556,6 +557,7 @@ public:
         char adaptTempInFile[128];             //  Restart information for adaptTemp to read
         char adaptTempRestartFile[128];        //  File to write restart information
         int  adaptTempRestartFreq;             //  Frequency of writing restart output
+        Bool adaptTempRestartAppend;           //  Appending instead of overwriting the restart file
         Bool adaptTempRandom;                  //  Do we assign random temperatures when we step out of [Tmin,Tmax]?
         /* End Adaptive Temperature Sampling */
 
