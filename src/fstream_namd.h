@@ -38,7 +38,7 @@ public:
 
   void seekbegin() {
     str("");
-#if !defined(WIN32) || defined(__CYGWIN)
+#if !defined(WIN32) || defined(__CYGWIN__)
     ftruncate(fd, 0);
     lseek(fd, 0, SEEK_SET);
 #else

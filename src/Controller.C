@@ -1096,22 +1096,26 @@ void Controller::rescaleVelocities(int step)
 
 void Controller::rescaleVelocitiesInit(void)
 {
-  if ( numDegFreedom <= 0 ) numDegFreedom = Node::Object()->molecule->num_deg_freedom();
-  if ( simParams->rescaleFreq <= 0 || !simParams->rescaleAdaptiveOn ) return;
+  if ( numDegFreedom <= 0 )
+    numDegFreedom = Node::Object()->molecule->num_deg_freedom();
+  if ( simParams->rescaleFreq <= 0 || !simParams->rescaleAdaptiveOn )
+    return;
   rescaleVelocitiesLoad();
 }
 
 void Controller::rescaleVelocitiesLoad(void)
 {
-  if ( simParams->rescaleFreq <= 0 || !simParams->rescaleAdaptiveOn ) return;
+  if ( simParams->rescaleFreq <= 0 || !simParams->rescaleAdaptiveOn )
+    return;
   std::ifstream fs(simParams->rescaleAdaptiveFile);
   if ( !fs ) return;
   double cnt, beta, beta2, dbde;
   fs >> cnt >> beta >> beta2 >> dbde;
   fs.close();
   iout << "LOADED ADAPTIVE VELOCITY-RESCALING DATA FROM "
-       << simParams->rescaleAdaptiveFile << ": STEP " << cnt << ", BETA " << beta
-       << ", VAR(BETA) " << beta2 << ", BETA'(E) " << dbde << "\n" << endi;
+       << simParams->rescaleAdaptiveFile << ": STEP " << cnt
+       << ", BETA " << beta << ", VAR(BETA) " << beta2
+       << ", BETA'(E) " << dbde << "\n" << endi;
   beta2 += beta * beta;
   if ( fmod(cnt, simParams->rescaleFreq) > 0.5 ) {
     cnt = cnt / simParams->rescaleFreq * simParams->rescaleFreq;
@@ -1124,8 +1128,10 @@ void Controller::rescaleVelocitiesLoad(void)
 
 void Controller::rescaleVelocitiesSave(int step)
 {
-  if ( simParams->rescaleFreq <= 0 || !simParams->rescaleAdaptiveOn ) return;
-  if ( rescaleVelocities_sum1 <= 0 ) return;
+  if ( simParams->rescaleFreq <= 0 || !simParams->rescaleAdaptiveOn )
+    return;
+  if ( rescaleVelocities_sum1 <= 0 )
+    return;
   NAMD_backup_file(simParams->rescaleAdaptiveFile);
   ofstream_namd fs(simParams->rescaleAdaptiveFile);
   if ( !fs ) return;
@@ -1365,7 +1371,6 @@ void Controller::tNHCSave(int step)
 {
   if ( !simParams->tNHCOn ) return;
 
-  FILE *fp;
   int i, nnhc = simParams->tNHCLen;
   NAMD_backup_file(simParams->tNHCFile);
   ofstream_namd fs(simParams->tNHCFile);
@@ -1381,7 +1386,6 @@ void Controller::tNHCSave(int step)
   for ( i = 0; i < nnhc; i++ )
     fs << tNHCmass[i] << " ";
   fs << "\n";
-  fclose(fp);
 }
 
 void Controller::tNHCLoad(void)
@@ -1445,7 +1449,7 @@ void Controller::keHistSave(int step)
   NAMD_backup_file(simParams->keHistFile);
   ofstream_namd fs(simParams->keHistFile);
   if ( !fs ) return;
-  fs << "# " << numDegFreedom << " " << step;
+  fs << "# " << numDegFreedom << " " << step << "\n";
   int i;
   BigReal tot = 0;
   for ( i = 0; i < keHistBinMax; i++ )
@@ -1475,8 +1479,8 @@ void Controller::keHistLoad(void)
 
   std::getline(fs, buf);
   while ( fs.good() ) {
-    std::getline(fs, buf);
     double ke, hist1, hist2, hist;
+    std::getline(fs, buf);
     sscanf(buf.c_str(), "%lf%lf%lf%lf", &ke, &hist1, &hist2, &hist);
     int i = (int) (ke / simParams->keHistBin);
     keHist[i] = hist;
@@ -1990,7 +1994,7 @@ void Controller::adaptTempInit(int step) {
         adaptTempPotEnergyVarNum = new BigReal[adaptTempBins];
         adaptTempPotEnergyVar    = new BigReal[adaptTempBins];
         adaptTempPotEnergyAve    = new BigReal[adaptTempBins];
-        adaptTempBetaN           = new BigReal[adaptTempBins];
+        adaptTempBetaN           = new BigReal[adaptTempBins + 1];
         adaptTempDBeta = (adaptTempBetaMax - adaptTempBetaMin)/(adaptTempBins);
         for(int j = 0; j < adaptTempBins; ++j) {
           adaptTempRead >> adaptTempPotEnergyAve[j];
@@ -1999,6 +2003,8 @@ void Controller::adaptTempInit(int step) {
           adaptTempRead >> adaptTempPotEnergyAveNum[j];
           adaptTempRead >> adaptTempPotEnergyVarNum[j];
           adaptTempRead >> adaptTempPotEnergyAveDen[j];
+        }
+        for ( int j = 0; j <= adaptTempBins; ++j ) {
           adaptTempBetaN[j] = adaptTempBetaMin + j * adaptTempDBeta;
         } 
         adaptTempRead.close();
@@ -2013,7 +2019,7 @@ void Controller::adaptTempInit(int step) {
       adaptTempPotEnergyVarNum = new BigReal[adaptTempBins];
       adaptTempPotEnergyVar    = new BigReal[adaptTempBins];
       adaptTempPotEnergyAve    = new BigReal[adaptTempBins];
-      adaptTempBetaN           = new BigReal[adaptTempBins];
+      adaptTempBetaN           = new BigReal[adaptTempBins + 1];
       adaptTempBetaMax = 1./simParams->adaptTempTmin;
       adaptTempBetaMin = 1./simParams->adaptTempTmax;
       adaptTempCg = simParams->adaptTempCgamma;   
@@ -2027,6 +2033,8 @@ void Controller::adaptTempInit(int step) {
           adaptTempPotEnergyVarNum[j] = 0.;
           adaptTempPotEnergyVar[j] = 0.;
           adaptTempPotEnergyAve[j] = 0.;
+      }
+      for ( int j = 0; j <= adaptTempBins; ++j ) {
           adaptTempBetaN[j] = adaptTempBetaMin + j * adaptTempDBeta;
       }
     }
@@ -2052,7 +2060,6 @@ void Controller::adaptTempInit(int step) {
 
 void Controller::adaptTempWriteRestart(int step) {
     if (simParams->adaptTempOn && !(step%simParams->adaptTempRestartFreq)) {
-        adaptTempRestartFile.seekp(std::ios::beg);        
         if ( !simParams->adaptTempRestartAppend ) {
           adaptTempRestartFile.seekbegin();
         }
@@ -2110,6 +2117,7 @@ Bool Controller::adaptTempUpdate(int step, int minimize)
     }
     adaptTempPotEnergySamples[adaptTempBin] += 1;
     BigReal gammaAve = 1.-adaptTempCg/adaptTempPotEnergySamples[adaptTempBin];
+    if ( gammaAve < 0 ) gammaAve = 0;
 
     BigReal potentialEnergy;
     BigReal potEnergyAverage;
@@ -2188,25 +2196,39 @@ Bool Controller::adaptTempUpdate(int step, int minimize)
       BigReal A0 = 0; // Sum_{from beta_minus to beta_{i+1} }
                       //   (beta - beta_minus)/(beta_{i+1} - beta_minus) var(E)
       BigReal A1 = 0; // Sum_{from beta_{i+1} to beta_plus }
-                      //   (beta_plus - beta) /(beta_plus - beta_{i+1}) var(E)
+                      //   (beta - beta_plus) /(beta_plus  - beta_{i+1}) var(E)
       BigReal A2 = 0; // 0.5 * DBeta * var(E) at bin i
       //A0 phi_s integral for beta_minus < beta < beta_{i+1}
+      int bins0 = 0;
       for (j = nMinus; j <= adaptTempBin; ++j) {
-          potEnergyAve0 += adaptTempPotEnergyAve[j] / (deltaBins + 1);
-          A0 += adaptTempPotEnergyVar[j] * (j - nMinus + 0.5) / (deltaBins + 1);
+        if ( adaptTempPotEnergySamples[j] > 0 ) {
+          potEnergyAve0 += adaptTempPotEnergyAve[j];
+          A0 += adaptTempPotEnergyVar[j] * (j - nMinus + 0.5);
+          bins0 += 1;
+        }
       }
+      potEnergyAve0 /= bins0;
+      A0 /= bins0;
 
       //A1 phi_s integral for beta_{i+1} < beta < beta_plus
+      int bins1 = 0;
       for (j = adaptTempBin + 1; j < nPlus; j++) {
-          potEnergyAve1 += adaptTempPotEnergyAve[j] / deltaBins;
-          A1 += adaptTempPotEnergyVar[j] * (j - nPlus + 0.5) / deltaBins;
+        if ( adaptTempPotEnergySamples[j] > 0 ) {
+          potEnergyAve1 += adaptTempPotEnergyAve[j];
+          A1 += adaptTempPotEnergyVar[j] * (j - nPlus + 0.5);
+          bins1 += 1;
+        }
+      }
+      if ( bins1 > 0 ) {
+        potEnergyAve1 /= bins1;
+        A1 /= bins1;
       }
 
       //A2 phi_t integral for beta_i
       A2 = 0.5 * potEnergyVariance;
 
-      // Now calculate a- and a+
-      BigReal aminus = 0, aplus = 0;
+      // Now calculate a+ and a-
+      BigReal aplus = 0;
       if ( A0 != A1 ) {
         aplus = (A0-A2)/(A0-A1);
       }
@@ -2216,7 +2238,7 @@ Bool Controller::adaptTempUpdate(int step, int minimize)
       if (aplus > 1) {
         aplus = 1;
       }
-      aminus = 1-aplus;
+      BigReal aminus = 1 - aplus;
       potEnergyAverage = aminus*potEnergyAve0 + aplus*potEnergyAve1;
       if (simParams->adaptTempDebug) {
         iout << "ADAPTEMP DEBUG:"  << "\n"
@@ -2250,8 +2272,7 @@ Bool Controller::adaptTempUpdate(int step, int minimize)
      // This helps sampling with poor statistics in the bins surrounding adaptTempBin.
       if ( dT > 1./adaptTempBetaMin || dT  < 1./adaptTempBetaMax ) {
         dT = adaptTempT;
-      }
-      else if (adaptTempAutoDt) {
+      } else if (adaptTempAutoDt) {
           //update temperature step size counter
           // FOR "TRUE" ADAPTIVE TEMPERING
           BigReal adaptTempTdiff = fabs(dT-adaptTempT);
