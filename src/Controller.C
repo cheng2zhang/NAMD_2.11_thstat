@@ -1997,6 +1997,7 @@ void Controller::adaptTempInit(int step) {
         adaptTempBetaN           = new BigReal[adaptTempBins + 1];
         adaptTempDBeta = (adaptTempBetaMax - adaptTempBetaMin)/(adaptTempBins);
         for(int j = 0; j < adaptTempBins; ++j) {
+          adaptTempRead >> readReal;
           adaptTempRead >> adaptTempPotEnergyAve[j];
           adaptTempRead >> adaptTempPotEnergyVar[j];
           adaptTempRead >> adaptTempPotEnergySamples[j];
@@ -2074,6 +2075,7 @@ void Controller::adaptTempWriteRestart(int step) {
         adaptTempRestartFile << adaptTempDt ;
         adaptTempRestartFile << "\n" ;
         for(int j = 0; j < adaptTempBins; ++j) {
+          adaptTempRestartFile << adaptTempBetaN[j] << " ";
           adaptTempRestartFile << adaptTempPotEnergyAve[j] << " ";
           adaptTempRestartFile << adaptTempPotEnergyVar[j] << " ";
           adaptTempRestartFile << adaptTempPotEnergySamples[j] << " ";
@@ -2192,6 +2194,8 @@ Bool Controller::adaptTempUpdate(int step, int minimize)
       // Variables for <E(beta)> estimate:
       BigReal potEnergyAve0 = 0.0;
       BigReal potEnergyAve1 = 0.0;
+      BigReal potEnergyDen0 = 0.0;
+      BigReal potEnergyDen1 = 0.0;
       // Integral terms
       BigReal A0 = 0; // Sum_{from beta_minus to beta_{i+1} }
                       //   (beta - beta_minus)/(beta_{i+1} - beta_minus) var(E)
@@ -2199,38 +2203,56 @@ Bool Controller::adaptTempUpdate(int step, int minimize)
                       //   (beta - beta_plus) /(beta_plus  - beta_{i+1}) var(E)
       BigReal A2 = 0; // 0.5 * DBeta * var(E) at bin i
       //A0 phi_s integral for beta_minus < beta < beta_{i+1}
-      int bins0 = 0;
-      for (j = nMinus; j <= adaptTempBin; ++j) {
-        if ( adaptTempPotEnergySamples[j] > 0 ) {
-          potEnergyAve0 += adaptTempPotEnergyAve[j];
-          A0 += adaptTempPotEnergyVar[j] * (j - nMinus + 0.5);
-          bins0 += 1;
+
+      // compute the default variance for lack of data
+      BigReal denMax = 0, defVar = 0;
+      for ( j = nMinus; j < nPlus; j++ ) {
+        if ( adaptTempPotEnergyAveDen[j] > denMax ) {
+          denMax = adaptTempPotEnergyAveDen[j];
+          defVar = adaptTempPotEnergyVar[j];
         }
       }
-      potEnergyAve0 /= bins0;
-      A0 /= bins0;
+
+      const BigReal varDenMin = simParams->adaptTempFreq * 10;
+      BigReal invwj, var;
+      for (j = nMinus; j <= adaptTempBin; ++j) {
+        invwj = adaptTempBetaMin + (j + 0.5) * adaptTempDBeta;
+        potEnergyAve0 += adaptTempPotEnergyAveNum[j] * invwj;
+        potEnergyDen0 += adaptTempPotEnergyAveDen[j] * invwj;
+        if ( adaptTempPotEnergyAveDen[j] > varDenMin ) {
+          var = adaptTempPotEnergyVar[j];
+        } else {
+          var = defVar;
+        }
+        A0 += var * (j - nMinus + 0.5);
+      }
+      potEnergyAve0 /= potEnergyDen0;
+      A0 /= potEnergyDen0;
 
       //A1 phi_s integral for beta_{i+1} < beta < beta_plus
-      int bins1 = 0;
       for (j = adaptTempBin + 1; j < nPlus; j++) {
-        if ( adaptTempPotEnergySamples[j] > 0 ) {
-          potEnergyAve1 += adaptTempPotEnergyAve[j];
-          A1 += adaptTempPotEnergyVar[j] * (j - nPlus + 0.5);
-          bins1 += 1;
+        invwj = adaptTempBetaMin + (j + 0.5) * adaptTempDBeta;
+        potEnergyAve1 += adaptTempPotEnergyAveNum[j] * invwj;
+        potEnergyDen1 += adaptTempPotEnergyAveDen[j] * invwj;
+        if ( adaptTempPotEnergyAveDen[j] > varDenMin ) {
+          var = adaptTempPotEnergyVar[j];
+        } else {
+          var = defVar;
         }
+        A1 += var * (j - nPlus + 0.5);
       }
-      if ( bins1 > 0 ) {
-        potEnergyAve1 /= bins1;
-        A1 /= bins1;
+      if ( potEnergyDen1 > 0 ) {
+        potEnergyAve1 /= potEnergyDen1;
+        A1 /= potEnergyDen1;
       }
 
       //A2 phi_t integral for beta_i
-      A2 = 0.5 * potEnergyVariance;
+      A2 = 0.5 * potEnergyVariance * (deltaBins + 1) / potEnergyDen0;
 
       // Now calculate a+ and a-
       BigReal aplus = 0;
-      if ( A0 != A1 ) {
-        aplus = (A0-A2)/(A0-A1);
+      if ( potEnergyDen1 > 0 ) {
+        aplus = (A0 - A2)/(A0 - A1);
       }
       if (aplus < 0) {
         aplus = 0;
@@ -2260,6 +2282,12 @@ Bool Controller::adaptTempUpdate(int step, int minimize)
              << "     A2:        " << A2 << "\n"
              << "     a+:        " << aplus << "\n"
              << "     a-:        " << aminus << "\n"
+             << "     potEner:   " << potentialEnergy << "\n"
+             << "     aveEner:   " << potEnergyAverage << "\n"
+             << "     aveEne0:   " << potEnergyAve0 << "\n"
+             << "     aveEne1:   " << potEnergyAve1 << "\n"
+             << "     aveDen0:   " << potEnergyDen0 << "\n"
+             << "     aveDen1:   " << potEnergyDen1 << "\n"
              << endi;
       }       
       
