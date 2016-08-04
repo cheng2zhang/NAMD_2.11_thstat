@@ -1443,8 +1443,9 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
    opts.range("adaptTempTmax", POSITIVE);
    opts.optional("adaptTempMD", "adaptTempBins","Number of bins to store average energies", &adaptTempBins,0);
    opts.range("adaptTempBins", NOT_NEGATIVE);
-   opts.optional("adaptTempMD", "adaptTempWindowSize","Window size as a fraction of the inverse temperature range", &adaptTempWindowSize,0.04);
+   opts.optional("adaptTempMD", "adaptTempWindowSize", "Window size as a fraction of the inverse temperature range", &adaptTempWindowSize, 0.04);
    opts.range("adaptTempWindowSize", NOT_NEGATIVE);
+   opts.optionalB("adaptTempMD", "adaptTempMCMove", "Use Monte Carlo to update the temperature", &adaptTempMCMove, FALSE);
    opts.optional("adaptTempMD", "adaptTempDt", "Integration timestep for Temp. updates", &adaptTempDt, 0.0001);
    opts.units("adaptTempDt", N_FSEC);
    opts.range("adaptTempDt", NOT_NEGATIVE);
@@ -1457,6 +1458,7 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
    opts.optionalB("adaptTempMD","adaptTempLangRescale","Send adaptTemp temperature to Langevin-style velocity rescaling thermostat", &adaptTempLangRescale,TRUE);
    opts.optionalB("adaptTempMD","adaptTempTNHC","Send adaptTemp temperature to Nose-Hoover chain thermostat",&adaptTempTNHC,TRUE);
    opts.optional("adaptTempMD", "adaptTempInFile", "File containing restart information for adaptTemp", adaptTempInFile);
+   opts.optionalB("adaptTempInFile", "adaptTempFixedAve", "Fixing the average values from the input restart file", &adaptTempFixedAve, FALSE);
    opts.optional("adaptTempMD", "adaptTempRestartFile", "File for writing adaptTemp restart information", adaptTempRestartFile);
    opts.require("adaptTempRestartFile","adaptTempRestartFreq", "Frequency of writing restart file", &adaptTempRestartFreq,0);
    opts.range("adaptTempRestartFreq",NOT_NEGATIVE);
@@ -3132,10 +3134,14 @@ void SimParameters::check_config(ParseOptions &opts, ConfigList *config, char *&
    if (adaptTempOn) {
      if (!adaptTempRescale && !adaptTempLangevin && !adaptTempLangRescale && !adaptTempTNHC) 
         NAMD_die("Adaptive tempering needs to be coupled to one of following: Langevin thermostat, velocity rescaling, Langevin velocity rescaling thermostat, and Nose-Hoover chain thermostat.");
-     if (opts.defined("adaptTempInFile") && (opts.defined("adaptTempTmin") ||
-                                             opts.defined("adaptTempTmax") ||
-                                             adaptTempBins != 0)) 
-        NAMD_die("cannot simultaneously specify adaptTempInFile and any of {adaptTempTmin, adaptTempTmax,adaptTempBins} as these are read from the input file");
+     if ( !opts.defined("adaptTempInFile") ) {
+       adaptTempInFile[0] = '\0';
+       adaptTempFixedAve = FALSE;
+     }
+     //if (opts.defined("adaptTempInFile") && (opts.defined("adaptTempTmin") ||
+     //                                        opts.defined("adaptTempTmax") ||
+     //                                        adaptTempBins != 0)) 
+     //   NAMD_die("cannot simultaneously specify adaptTempInFile and any of {adaptTempTmin, adaptTempTmax,adaptTempBins} as these are read from the input file");
      if (!opts.defined("adaptTempInFile") && !(opts.defined("adaptTempTmin") &&
                                              opts.defined("adaptTempTmax") &&
                                              adaptTempBins != 0 ))  
@@ -5238,6 +5244,10 @@ if ( openatomOn )
         iout << iINFO << "      ADAPTIVE TEMPERING COUPLED TO LANGEVIN THERMOSTAT\n";
      if ( adaptTempRescale )
         iout << iINFO << "      ADAPTIVE TEMPERING COUPLED TO VELOCITY RESCALING\n";
+     if (adaptTempInFile[0] != '\0') {
+        iout << iINFO << "      READING RESTART INFORMATION FROM " << adaptTempInFile << " "
+             << (adaptTempFixedAve ? "(FIXED)" : "") << "\n";
+     }
      if (adaptTempRestartFreq > 0) {
         iout << iINFO << "      WRITING RESTART INFORMATION TO " << adaptTempRestartFile << " EVERY " << adaptTempRestartFreq << " STEPS\n";
      }
