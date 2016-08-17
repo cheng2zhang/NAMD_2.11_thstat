@@ -263,7 +263,9 @@ protected:
    void adaptTempDone(int step);
    BigReal adaptTempGetInvW(BigReal tp);
    BigReal adaptTempGetPEAve(int i, BigReal def = 0);
+   BigReal adaptTempGetIntE(BigReal beta, int i, BigReal nbeta, int ni, double& epave);
    BigReal adaptTempMCMove(BigReal tp, BigReal ep);
+   BigReal adaptTempLangevin(BigReal tp, BigReal ep);
    Bool adaptTempUpdate(int step, int minimize = 0);
    void adaptTempWriteRestart(int step);
    int *adaptTempBinMinus;
@@ -296,6 +298,17 @@ protected:
        }
      }
 
+     void empty(void) {
+       for ( int j = 0; j < winSize; j++ ) {
+         sumw[j]  = 0;
+         sumE[j]  = 0;
+         sumE2[j] = 0;
+         ave[j]   = 0;
+         var[j]   = 0;
+         cnt[j]   = 0;
+       }
+     }
+
      // initialize the window
      void init(int minus, int plus) {
        bin0 = minus;
@@ -309,14 +322,7 @@ protected:
        ave   = new double[winSize];
        var   = new double[winSize];
        cnt   = new double[winSize];
-       for ( int j = 0; j < winSize; j++ ) {
-         sumw[j]  = 0;
-         sumE[j]  = 0;
-         sumE2[j] = 0;
-         ave[j]   = 0;
-         var[j]   = 0;
-         cnt[j]   = 0;
-       }
+       empty();
      }
 
      // compute the average and variance of each bin
@@ -413,7 +419,11 @@ protected:
      }
    };
    AdaptTempSepAcc *adaptTempSepAcc;
-   double  adaptTempMCTot, adaptTempMCAcc, adaptTempMCDAcc;
+   double  adaptTempMCSize;
+   double  adaptTempMCTot, adaptTempMCAcc;
+   double  adaptTempMCDAcc, adaptTempMCFail; // accumulators for adjusting the MC size
+   double  adaptTempLangTot, adaptTempLangAcc;
+   double  adaptTempLangDAcc, adaptTempLangFail; // accumulators for adjusting Dt
    double  *adaptTempPotEnergyAveNum;
    double  *adaptTempPotEnergyAveDen;
    double  *adaptTempPotEnergyVarNum;
