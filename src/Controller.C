@@ -462,7 +462,7 @@ void Controller::integrate(int scriptTask) {
 	langevinPiston1(step);
         rescaleaccelMD(step);
 	enqueueCollections(step);  // after lattice scaling!
-	receivePressure(step);
+	receivePressure(step); // calling reduction->require()
         if ( zeroMomentum && dofull && ! (step % slowFreq) )
 						correctMomentum(step);
 	langevinPiston2(step);
@@ -1971,12 +1971,10 @@ void Controller::rescaleaccelMD(int step, int minimize)
 void Controller::adaptTempInit(int step) {
     if (!simParams->adaptTempOn) return;
     iout << iINFO << "INITIALISING ADAPTIVE TEMPERING\n" << endi;
-    adaptTempDtMin = 0;
-    adaptTempDtMax = 0;
-    adaptTempAutoDt = false;
     adaptTempMCSize = simParams->adaptTempMCSize;
     adaptTempMCTot = adaptTempMCAcc = 0;
     adaptTempMCDAcc = adaptTempMCFail = 0;
+    adaptTempDt = simParams->adaptTempDt;
     adaptTempLangTot = adaptTempLangAcc = 0;
     adaptTempLangDAcc = adaptTempLangFail = 0;
     if (simParams->adaptTempInFile[0] != '\0') {
@@ -2033,9 +2031,8 @@ void Controller::adaptTempInit(int step) {
               adaptTempPotEnergyAveDen[j] = 0;
             }
           }
-          for ( int j = 0; j <= adaptTempBins; ++j ) {
+          for ( int j = 0; j <= adaptTempBins; j++ )
             adaptTempBetaN[j] = adaptTempBetaMin + j * adaptTempDBeta;
-          }
           adaptTempBinMinus = new int[adaptTempBins];
           adaptTempBinPlus  = new int[adaptTempBins];
           // read in data for separate accumulators
@@ -2043,7 +2040,7 @@ void Controller::adaptTempInit(int step) {
             char info[256];
             try {
               std::getline(adaptTempRead, buf);
-              if ( strncmp(buf.c_str(), "SEP BEGIN", 9) != 0 )
+              if ( strncasecmp(buf.c_str(), "SEP BEGIN", 9) != 0 )
                 throw std::ios::failure("");
             } catch ( const std::ios::failure& e ) {
               sprintf(info, "No beginning for separator accumulators, file %s\n",
@@ -2079,23 +2076,23 @@ void Controller::adaptTempInit(int step) {
               if ( simParams->adaptTempEmptyData ) acc->empty();
             }
             std::getline(adaptTempRead, buf);
-            if ( strncmp(buf.c_str(), "SEP END", 7) != 0 ) {
+            if ( strncasecmp(buf.c_str(), "SEP END", 7) != 0 ) {
               sprintf(info, "No ending for separator accumulators, file %s\n",
                   simParams->adaptTempInFile);
               NAMD_die(info);
             }
           }
-          try { // to read MC data
+          try { // to read MC or Langevin data
             std::getline(adaptTempRead, buf);
             const char *p = buf.c_str();
-            if ( strncmp(p, "MC ", 3) == 0 ) {
+            if ( strncasecmp(p, "MC ", 3) == 0 ) {
               sscanf(p + 3, "%lf%lf%lf%lf%lf", &adaptTempMCSize,
                   &adaptTempMCTot, &adaptTempMCAcc, &adaptTempMCDAcc, &adaptTempMCFail);
-            } else if ( strncmp(p, "LANGEVIN ", 9) == 0 ) {
+            } else if ( strncasecmp(p, "LANGEVIN ", 9) == 0 ) {
               sscanf(p + 9, "%lf%lf%lf%lf", &adaptTempLangTot, &adaptTempLangAcc,
                   &adaptTempLangDAcc, &adaptTempLangFail);
             }
-            //CkPrintf("%s\n%g %g %g\n",buf.c_str(), adaptTempMCSize, adaptTempMCTot, adaptTempMCAcc); getchar();
+            //CkPrintf("%s\n%g %g %g\n", p, adaptTempMCSize, adaptTempMCTot, adaptTempMCAcc); getchar();
           } catch ( const std::ios::failure& e ) {
             iout << "Failed to read MC/Langevin data from " <<  simParams->adaptTempInFile << "\n" << endi;
           }
@@ -2118,40 +2115,38 @@ void Controller::adaptTempInit(int step) {
       adaptTempBetaMax = 1./simParams->adaptTempTmin;
       adaptTempBetaMin = 1./simParams->adaptTempTmax;
       adaptTempCg = simParams->adaptTempCgamma;   
-      adaptTempDt = simParams->adaptTempDt;
       adaptTempDBeta = (adaptTempBetaMax - adaptTempBetaMin)/(adaptTempBins);
       adaptTempT = simParams->thermostatTemp();
       for(int j = 0; j < adaptTempBins; ++j){
-          adaptTempPotEnergyAveNum[j] = 0.;
-          adaptTempPotEnergyAveDen[j] = 0.;
-          adaptTempPotEnergySamples[j] = 0;
-          adaptTempPotEnergyVarNum[j] = 0.;
-          adaptTempPotEnergyVar[j] = 0.;
-          adaptTempPotEnergyAve[j] = 0.;
+        adaptTempPotEnergyAveNum[j] = 0.;
+        adaptTempPotEnergyAveDen[j] = 0.;
+        adaptTempPotEnergySamples[j] = 0;
+        adaptTempPotEnergyVarNum[j] = 0.;
+        adaptTempPotEnergyVar[j] = 0.;
+        adaptTempPotEnergyAve[j] = 0.;
       }
-      for ( int j = 0; j <= adaptTempBins; ++j ) {
-          adaptTempBetaN[j] = adaptTempBetaMin + j * adaptTempDBeta;
-      }
+      for ( int j = 0; j <= adaptTempBins; j++ )
+        adaptTempBetaN[j] = adaptTempBetaMin + j * adaptTempDBeta;
       // compute the window boundaries
       adaptTempBinMinus = new int[adaptTempBins];
       adaptTempBinPlus  = new int[adaptTempBins];
       for ( int j = 0; j < adaptTempBins; j++ ) {
-          BigReal betaMid = adaptTempBetaMin + (j + 0.5) * adaptTempDBeta;
-          BigReal deltaBeta = betaMid * simParams->adaptTempWindowSize;
-          int deltaBins = (int) (deltaBeta / adaptTempDBeta + 0.5);
-          // adjust the window size such that the window does not exceed the boundaries
-          if ( j - deltaBins < 0 )
-            deltaBins = j;
-          if ( j + deltaBins + 1 > adaptTempBins )
-            deltaBins = adaptTempBins - j - 1;
-          adaptTempBinMinus[j] = j - deltaBins;
-          adaptTempBinPlus[j] = j + deltaBins + 1;
+        BigReal betaMid = adaptTempBetaMin + (j + 0.5) * adaptTempDBeta;
+        BigReal deltaBeta = betaMid * simParams->adaptTempWindowSize;
+        int deltaBins = (int) (deltaBeta / adaptTempDBeta + 0.5);
+        // adjust the window size such that the window does not exceed the boundaries
+        if ( j - deltaBins < 0 )
+          deltaBins = j;
+        if ( j + deltaBins + 1 > adaptTempBins )
+          deltaBins = adaptTempBins - j - 1;
+        adaptTempBinMinus[j] = j - deltaBins;
+        adaptTempBinPlus[j] = j + deltaBins + 1;
       }
       // initialize the separate accumulators
       if ( simParams->adaptTempSepOn ) {
-          adaptTempSepAcc = new AdaptTempSepAcc[adaptTempBins];
-          for ( int i = 0; i < adaptTempBins; ++i )
-            adaptTempSepAcc[i].init(adaptTempBinMinus[i], adaptTempBinPlus[i]);
+        adaptTempSepAcc = new AdaptTempSepAcc[adaptTempBins];
+        for ( int i = 0; i < adaptTempBins; ++i )
+          adaptTempSepAcc[i].init(adaptTempBinMinus[i], adaptTempBinPlus[i]);
       }
     }
     // wrap adaptTempT within the range
@@ -2161,13 +2156,6 @@ void Controller::adaptTempInit(int step) {
     if ( beta >= adaptTempBetaMax )
       beta = adaptTempBetaMin * 0.01 + adaptTempBetaMax * 0.99;
     adaptTempT = 1.0 / beta;
-    if (simParams->adaptTempAutoDt > 0.0) {
-       adaptTempAutoDt = true;
-       adaptTempDtMin =  simParams->adaptTempAutoDt * 0.5;
-       adaptTempDtMax =  simParams->adaptTempAutoDt * 1.5;
-    }
-    adaptTempDTave = 0;
-    adaptTempDTavenum = 0;
     iout << iINFO << "ADAPTIVE TEMPERING: TEMPERATURE RANGE: [" << 1./adaptTempBetaMax << "," << 1./adaptTempBetaMin << "] KELVIN\n";
     iout << iINFO << "ADAPTIVE TEMPERING: NUMBER OF BINS TO STORE POT. ENERGY: " << adaptTempBins << "\n";
     iout << iINFO << "ADAPTIVE TEMPERING: ADAPTIVE BIN AVERAGING PARAMETER: " << adaptTempCg << "\n";
@@ -2221,7 +2209,7 @@ void Controller::adaptTempWriteRestart(int step) {
           BigReal bet = adaptTempBetaMin + (j + 0.5) * adaptTempDBeta;
           // use printf for better precision control
           sprintf(s, "%.12f\t%14.6f\t%14.6f\t%ld\t%22.14e\t%22.14e\t%22.14e\t%10.6f\n",
-              adaptTempBetaN[j], adaptTempPotEnergyAve[j], adaptTempPotEnergyVar[j],
+              bet, adaptTempPotEnergyAve[j], adaptTempPotEnergyVar[j],
               adaptTempPotEnergySamples[j], adaptTempPotEnergyAveNum[j],
               adaptTempPotEnergyVarNum[j], adaptTempPotEnergyAveDen[j],
               adaptTempGetInvW(1.0 / bet));
@@ -2250,7 +2238,7 @@ void Controller::adaptTempWriteRestart(int step) {
           sprintf(s, "MC %g %.0f %.0f %22.14e %.0f\n", adaptTempMCSize,
               adaptTempMCTot, adaptTempMCAcc, adaptTempMCDAcc, adaptTempMCFail);
         } else {
-          sprintf(s, "Langevin %.0f %.0f %22.14e %.0f\n", adaptTempLangTot,
+          sprintf(s, "LANGEVIN %.0f %.0f %22.14e %.0f\n", adaptTempLangTot,
               adaptTempLangAcc, adaptTempLangDAcc, adaptTempLangFail);
         }
         adaptTempRestartFile << s;
@@ -2267,7 +2255,7 @@ BigReal Controller::adaptTempGetPEAve(int i, BigReal def)
 {
     const BigReal varCntMin = simParams->adaptTempFreq * 10;
     BigReal potEnergyAverage;
-  
+
     if ( simParams->adaptTempSepOn ) {
       potEnergyAverage = adaptTempSepAcc[i].iiave(varCntMin, def);
     } else {
@@ -2286,7 +2274,7 @@ BigReal Controller::adaptTempGetPEAve(int i, BigReal def)
                       //   (beta - beta_plus) /(beta_plus  - beta_{i+1}) var(E)
       BigReal A2 = 0; // 0.5 * DBeta * var(E) at bin i
       //A0 phi_s integral for beta_minus < beta < beta_{i+1}
-  
+
       // compute the default variance for lack of data
       BigReal denMax = 0, defVar = 0;
       for ( j = nMinus; j < nPlus; j++ ) {
@@ -2295,7 +2283,7 @@ BigReal Controller::adaptTempGetPEAve(int i, BigReal def)
           defVar = adaptTempPotEnergyVar[j];
         }
       }
-  
+
       BigReal var;
       for ( j = nMinus; j <= i; j++ ) {
         potEnergyAve0 += adaptTempPotEnergyAveNum[j];
@@ -2310,7 +2298,7 @@ BigReal Controller::adaptTempGetPEAve(int i, BigReal def)
         var = (adaptTempPotEnergySamples[i] > varCntMin) ? adaptTempPotEnergyVar[i] : defVar;
         A2 = 0.5 * var * (i - nMinus + 1) / den0;
       }
-  
+
       //A1 phi_s integral for beta_{i+1} < beta < beta_plus
       for ( j = i + 1; j < nPlus; j++ ) {
         potEnergyAve1 += adaptTempPotEnergyAveNum[j];
@@ -2322,7 +2310,7 @@ BigReal Controller::adaptTempGetPEAve(int i, BigReal def)
         potEnergyAve1 /= den1;
         A1 /= den1;
       }
-  
+
       if ( den0 + den1 <= 0 ) {
         potEnergyAverage = def;
       } else {
@@ -2398,15 +2386,14 @@ BigReal Controller::adaptTempGetIntE(BigReal beta, int i, BigReal nbeta, int ni,
       epave = adaptTempPotEnergyAve[ni];
       delta += epave * (nbeta - adaptTempBetaN[ni + 1]);
     }
-    return delta;
+    return delta/BOLTZMANN;
 }
 
 BigReal Controller::adaptTempMCMove(BigReal tp, BigReal ep)
 {
-    double beta = 1./tp, nbeta, r, delta, epave;
     double kB = BOLTZMANN, x = simParams->adaptTempWeightExp;
+    double beta = 1./tp, nbeta, r, delta, epave;
     int i, ni, acc = 0;
-    adaptTempMCTot += 1;
     r = random->gaussian();
     nbeta = beta * exp(adaptTempMCSize * r); // evenly change ln(beta)
     i  = (int) ( (beta  - adaptTempBetaMin) / adaptTempDBeta );
@@ -2414,12 +2401,11 @@ BigReal Controller::adaptTempMCMove(BigReal tp, BigReal ep)
     //CkPrintf("delta %g, beta %g, %g, ep %g, i %d, %d\n", delta, beta, nbeta, ep, i, ni);
     if ( nbeta >= adaptTempBetaMin && ni < adaptTempBins ) {
       delta = adaptTempGetIntE(beta, i, nbeta, ni, epave);
-      delta = (delta - ep * (nbeta - beta))/kB + (x - 1) * log(beta/nbeta);
+      delta = delta - ep * (nbeta - beta)/kB + (x - 1) * log(beta/nbeta);
       //CkPrintf("delta %g cf %g, beta %g, %g, ep %g, %g, bin %d, %d\n", delta,
-      //    ((adaptTempPotEnergyAve[i]+adaptTempPotEnergyAve[ni])/2 - ep) * (nbeta - beta) / kB
+      //    ((adaptTempPotEnergyAve[i]+adaptTempPotEnergyAve[ni])/2 - ep) * (nbeta - beta) / kB,
       //    beta, nbeta, ep, epave, i, ni); // getchar();
       acc = ( delta > 0 || random->uniform() < exp(delta) );
-      adaptTempMCAcc += acc;
       if ( acc ) { // for d(acc. ratio)/d(ln beta)
         if ( delta < 0 )
           adaptTempMCDAcc += -r * ((ep - epave)*(nbeta/kB) + x - 1);
@@ -2428,10 +2414,13 @@ BigReal Controller::adaptTempMCMove(BigReal tp, BigReal ep)
           adaptTempMCFail += 1;
       }
     }
+    adaptTempMCTot += 1;
+    adaptTempMCAcc += acc;
     // adjust the MC move size automatically
     if ( simParams->adaptTempMCAutoAR > 0 && adaptTempMCTot > 100 ) {
       double dacc = adaptTempMCDAcc;
-      if ( adaptTempMCFail > 5 ) { // out-of-boundary rejections 
+      if ( dacc > 0 ) dacc = 0;
+      if ( adaptTempMCFail > 5 ) { // out-of-boundary rejections
         dacc -= adaptTempMCFail / simParams->adaptTempMCSizeInc;
       } else { // approximation
         dacc -= 2 * adaptTempMCAcc;
@@ -2446,38 +2435,34 @@ BigReal Controller::adaptTempMCMove(BigReal tp, BigReal ep)
 
 BigReal Controller::adaptTempLangevin(BigReal tp, BigReal ep)
 {
-    double kB = BOLTZMANN, beta = 1./tp, x = simParams->adaptTempWeightExp;
+    double kB = BOLTZMANN, x = simParams->adaptTempWeightExp;
+    double beta = 1./tp, Beta = beta/kB;
     int i = (int) ( (beta - adaptTempBetaMin) / adaptTempDBeta );
     double epave = adaptTempGetPEAve(i, 0);
     double r = random->gaussian();
     double dt = adaptTempDt, a = sqrt(2. * dt);
-    double de = ep - epave + kB * tp * x;
-    //double dtp = r * a * tp;
+    double de = ep - epave + x / Beta;
     double dtp = dt * de / kB + r * a * tp;
     double ntp = tp + dtp;
-    double nbeta = 1./ntp;
+    double nbeta = 1./ntp, nBeta = nbeta/kB;
     int ni = (int) ( (nbeta - adaptTempBetaMin) / adaptTempDBeta );
-    // use the Monte Carlo scheme to accept the new temperature
+    // use Monte Carlo to accept the new temperature
     int acc = 0;
     if ( nbeta >= adaptTempBetaMin && ni < adaptTempBins ) {
       double nepave;
       double delta = adaptTempGetIntE(beta, i, nbeta, ni, nepave);
-      double nde = ep - nepave + kB * ntp * x;
-      //double nr = -dtp / (a * ntp);
-      double nr = (-dtp - dt * nde / kB) / (a * ntp);
-      delta = ((beta - nbeta) * ep + delta) / kB
-               + (x - 3) * log(beta/nbeta)  + (r*r - nr*nr)/2;
+      double nde = ep - nepave + x / nBeta;
+      double nr = (-dtp/ntp - dt*nde*nBeta) / a;
+      delta = (Beta - nBeta) * ep + delta
+            + (x - 3) * log(Beta/nBeta) + (r*r - nr*nr)/2;
       acc = ( delta > 0 || random->uniform() < exp(delta) );
       //CkPrintf("acc %d, delta %g, beta %g, %g, ep %g, i %d, %d\n", acc, delta, beta, nbeta, ep, i, ni);
       if ( acc ) { // for d(acc. ratio)/da
         if ( delta < 0 ) {
-          BigReal Beta = beta/kB, nBeta = nbeta/kB;
-          BigReal dnB = -nBeta * (nBeta/Beta) * (r + Beta*de*a); // d(nBeta)/da
-          BigReal nvar = adaptTempPotEnergyVar[ adaptTempPotEnergySamples[ni] > 0 ? ni : i ];
-          BigReal dnr = -(nBeta*nde+nr/a) + (1./Beta/a - (ep - nepave + nBeta*nvar)*a/2) * dnB; // d(nr)/da
-          BigReal del = -((nde - 3./nBeta) * dnB + nr * dnr); // d(delta)/da
-          //del = (ep - epave) * nbeta / kB + (simParams->adaptTempWeightExp - 1);
-          adaptTempLangDAcc += del;
+          BigReal dnB = -nBeta*nBeta/Beta * (r + Beta*de*a); // d(nBeta)/da
+          BigReal nvar = adaptTempPotEnergyVar[ adaptTempPotEnergySamples[ni] > 0 ? ni : i ]; // -E'(Beta)
+          BigReal dnr = -(nBeta*nde + nr/a) + (1./Beta/a - (ep - nepave + nBeta*nvar)*a/2) * dnB; // d(nr)/da
+          adaptTempLangDAcc += -((nde - 3./nBeta) * dnB + nr * dnr); // d(delta)/da
         }
         double ma = a + simParams->adaptTempMCSizeInc;
         double mbeta = 1./(tp + (ma*ma/2) * de/kB + r * ma * tp);
@@ -2491,7 +2476,7 @@ BigReal Controller::adaptTempLangevin(BigReal tp, BigReal ep)
     if ( simParams->adaptTempDtAutoAR > 0 && adaptTempLangTot > 100 ) {
       double dacc = adaptTempLangDAcc;
       if ( dacc > 0 ) dacc = 0;
-      if ( adaptTempLangFail > 5 ) { // out-of-boundary rejections 
+      if ( adaptTempLangFail > 5 ) { // out-of-boundary rejections
         dacc -= adaptTempLangFail / simParams->adaptTempMCSizeInc;
       } else { // approximation
         dacc -= 2 * adaptTempLangAcc;
@@ -2601,7 +2586,6 @@ Bool Controller::adaptTempUpdate(int step, int minimize)
     // (beta_i,beta_{i+1}) using Eq 2 of JCP 132 244101
     if ( ! ( step % simParams->adaptTempFreq ) ) {
       BigReal dT; // dT is the new temperature
-
       if ( adaptTempPotEnergySamples[adaptTempBin] <= simParams->adaptTempSamplesMin ) {
         // avoid making temperature transitions without enough samples
         dT = adaptTempT;
@@ -2609,40 +2593,8 @@ Bool Controller::adaptTempUpdate(int step, int minimize)
         dT = adaptTempMCMove(adaptTempT, potentialEnergy);
       } else { // Langevin equation temperature update
         dT = adaptTempLangevin(adaptTempT, potentialEnergy);
-     }
-
-     // Check if dT in [adaptTempTmin,adaptTempTmax]. If not try simpler estimate of mean
-     // This helps sampling with poor statistics in the bins surrounding adaptTempBin.
-      if ( dT >= 1./adaptTempBetaMin || dT  < 1./adaptTempBetaMax ) {
-        dT = adaptTempT;
-      } else if (adaptTempAutoDt) {
-          //update temperature step size counter
-          // FOR "TRUE" ADAPTIVE TEMPERING
-          BigReal adaptTempTdiff = fabs(dT-adaptTempT);
-          if (adaptTempTdiff > 0) {
-            adaptTempDTave += adaptTempTdiff; 
-            adaptTempDTavenum++;
-//            iout << "ADAPTEMP: adapTempTdiff = " << adaptTempTdiff << "\n";
-          }
-          if(adaptTempDTavenum == 100){
-                BigReal Frac;
-                adaptTempDTave /= adaptTempDTavenum;
-                Frac = 1./adaptTempBetaMin-1./adaptTempBetaMax;
-                Frac = adaptTempDTave/Frac;
-                //if average temperature jump is > simParams->adaptTempAutoDt of temperature range,
-                //modify jump size to match simParams->adaptTempAutoDt
-                iout << "ADAPTEMP: " << step << " FRAC " << Frac << "\n"; 
-                if (Frac > adaptTempDtMax || Frac < adaptTempDtMin) {
-                    Frac = simParams->adaptTempAutoDt / Frac;
-                    iout << "ADAPTEMP: Updating adaptTempDt to ";
-                    adaptTempDt *= Frac;
-                    iout << adaptTempDt << "\n" << endi;
-                }
-                adaptTempDTave = 0;
-                adaptTempDTavenum = 0;
-          }
       }
-      
+
       BigReal tScale = dT / adaptTempT;
       BigReal vScale = sqrt(tScale);
       // for velocity-rescaling-based thermostats,
@@ -2665,41 +2617,43 @@ Bool Controller::adaptTempUpdate(int step, int minimize)
     if ( step % simParams->adaptTempRestartFreq == 0 )
       adaptTempWriteRestart(step);
     if ( ! (step % simParams->adaptTempOutFreq) ) {
-        char info[256];
-        iout << "ADAPTEMP: STEP " << step
-             << " TEMP "   << adaptTempT
-             << " BIN " << adaptTempBin
-             << " ENERGY " << std::setprecision(10) << potentialEnergy   
-             << " ENERGYAVG " << adaptTempPotEnergyAve[adaptTempBin]
-             << " ENERGYVAR " << adaptTempPotEnergyVar[adaptTempBin];
-        if ( simParams->adaptTempMCMove ) { // Monte Carlo
-          if ( adaptTempMCTot > 0 ) {
-            BigReal acc = adaptTempMCAcc / adaptTempMCTot;
-            BigReal dacc = (adaptTempMCDAcc - adaptTempMCFail / simParams->adaptTempMCSizeInc) / adaptTempMCTot;
-            if ( dacc > -0.01 ) dacc = -0.01;
-            BigReal ar = simParams->adaptTempMCAutoAR;
-            if ( ar <= 0 ) ar = 0.5;
-            BigReal newsize = adaptTempMCSize + (ar - acc) / dacc;
-            if ( newsize < 0 ) newsize = 0;
-            sprintf(info, " MC %.0f(%.0f) ACC. RATIO %.3f DAR %g SIZE %g -> %g",
-                adaptTempMCTot, adaptTempMCFail, 100*acc, dacc, adaptTempMCSize, newsize);
-            iout << info;
-          }
-        } else { // Langevin equation
-          if ( adaptTempLangTot > 0 ) {
-            BigReal acc = adaptTempLangAcc / adaptTempLangTot;
-            BigReal dacc = (adaptTempLangDAcc - adaptTempLangFail / simParams->adaptTempMCSizeInc) / adaptTempLangTot;
-            BigReal oldsize = sqrt(2*adaptTempDt);
-            BigReal ar = simParams->adaptTempDtAutoAR;
-            if ( ar <= 0 ) ar = 0.5;
-            BigReal newsize = oldsize + (ar - acc) / dacc;
-            if ( newsize < 0 ) newsize = 0;
-            BigReal newdt = newsize * newsize / 2;
-            sprintf(info, " LANGEVIN %.0f(%.0f) ACC. RATIO %.3f DAR %g SIZE %g -> %g, DT %g -> %g",
-                adaptTempLangTot, adaptTempLangFail, 100*acc, dacc, oldsize, newsize, adaptTempDt, newdt);
-          }
+      char info[256];
+      sprintf(info, "ADAPTEMP: STEP %d TEMP %g BIN %d ENERGY %.5f AVG %g VAR %g",
+          step, adaptTempT, adaptTempBin, potentialEnergy,
+          adaptTempPotEnergyAve[adaptTempBin], adaptTempPotEnergyVar[adaptTempBin]);
+      iout << info;
+      if ( simParams->adaptTempMCMove ) { // Monte Carlo
+        if ( adaptTempMCTot > 0 ) {
+          BigReal acc = adaptTempMCAcc / adaptTempMCTot;
+          BigReal dacc = adaptTempMCDAcc / adaptTempMCTot;
+          if ( dacc > 0 ) dacc = 0;
+          dacc -= adaptTempMCFail / simParams->adaptTempMCSizeInc / adaptTempMCTot;
+          BigReal ar = simParams->adaptTempMCAutoAR;
+          if ( ar <= 0 ) ar = 0.5;
+          BigReal newsize = adaptTempMCSize + (ar - acc) / dacc;
+          if ( newsize < 0 ) newsize = 0;
+          sprintf(info, " MC %.0f(%.0f) ACC. RATIO %.3f%% DAR %g SIZE %g -> %g",
+              adaptTempMCTot, adaptTempMCFail, 100*acc, dacc, adaptTempMCSize, newsize);
+          iout << info;
         }
-        iout << "\n" << endi;
+      } else { // Langevin equation
+        if ( adaptTempLangTot > 0 ) {
+          BigReal acc = adaptTempLangAcc / adaptTempLangTot;
+          BigReal dacc = adaptTempLangDAcc / adaptTempLangTot;
+          if ( dacc > 0 ) dacc = 0;
+          dacc -= adaptTempLangFail / simParams->adaptTempMCSizeInc / adaptTempLangTot;
+          BigReal oldsize = sqrt(2*adaptTempDt);
+          BigReal ar = simParams->adaptTempDtAutoAR;
+          if ( ar <= 0 ) ar = 0.5;
+          BigReal newsize = oldsize + (ar - acc) / dacc;
+          if ( newsize < 0 ) newsize = 0;
+          BigReal newdt = newsize * newsize / 2;
+          sprintf(info, " LANGEVIN %.0f(%.0f) ACC. RATIO %.3f%% DAR %g SIZE %g -> %g, DT %g -> %g",
+              adaptTempLangTot, adaptTempLangFail, 100*acc, dacc, oldsize, newsize, adaptTempDt, newdt);
+          iout << info;
+        }
+      }
+      iout << "\n" << endi;
    }
    return scaled;
 }

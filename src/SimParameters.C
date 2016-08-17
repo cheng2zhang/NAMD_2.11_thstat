@@ -1452,7 +1452,7 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
    opts.range("adaptTempMCAutoAR", NOT_NEGATIVE);
    opts.optional("adaptTempMCMove", "adaptTempMCSizeInc", "Virtual size increment for MC temperature moves", &adaptTempMCSizeInc, 0.0005);
    opts.range("adaptTempMCSizeInc", POSITIVE);
-   opts.optional("adaptTempMD", "adaptTempDt", "Integration timestep for Temp. updates", &adaptTempDt, 0.00001);
+   opts.optional("adaptTempMD", "adaptTempDt", "Integration timestep for Temp. updates", &adaptTempDt, 0.0001);
    opts.range("adaptTempDt", NOT_NEGATIVE);
    opts.optional("adaptTempDt", "adaptTempDtAutoAR", "Target acceptance ratio for automatic adjustment of the size of Langevin temperature moves", &adaptTempDtAutoAR, 0.0);
    opts.range("adaptTempDtAutoAR", NOT_NEGATIVE);
@@ -3148,6 +3148,12 @@ void SimParameters::check_config(ParseOptions &opts, ConfigList *config, char *&
        adaptTempInFile[0] = '\0';
        adaptTempFixedAve = FALSE;
      }
+     if ( opts.defined("adaptTempAutoDt") )
+       iout << iWARN << "adaptTempAutoDt is deprecated.\n" << endi;
+     if ( adaptTempRandom )
+       iout << iWARN << "adaptTempRandom is deprecated.\n" << endi;
+     if ( opts.defined("adaptTempCgamma") && !adaptTempSepOn )
+       iout << iWARN << "adaptTempCgamma is better used with adaptTempSep.\n" << endi;
      //if (opts.defined("adaptTempInFile") && (opts.defined("adaptTempTmin") ||
      //                                        opts.defined("adaptTempTmax") ||
      //                                        adaptTempBins != 0)) 
