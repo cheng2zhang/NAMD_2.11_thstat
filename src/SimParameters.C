@@ -188,7 +188,6 @@ void SimParameters::scriptSet(const char *param, const char *value) {
   SCRIPT_PARSE_FLOAT("reassignTemp",reassignTemp)
   SCRIPT_PARSE_FLOAT("rescaleTemp",rescaleTemp)
   SCRIPT_PARSE_BOOL("rescaleAdaptive",rescaleAdaptiveOn)
-  SCRIPT_PARSE_FLOAT("rescaleAdaptiveDedk",rescaleAdaptiveDedk)
   SCRIPT_PARSE_FLOAT("langRescaleTemp",langRescaleTemp)
   SCRIPT_PARSE_FLOAT("langRescaleDt",langRescaleDt)
   SCRIPT_PARSE_FLOAT("tNHCTemp",langRescaleTemp)
@@ -1235,6 +1234,8 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
    opts.optional("energyLogFile", "energyLogFreq", "Frequency of writing the energy log file",
        &energyLogFreq, 1);
    opts.range("energyLogFreq", POSITIVE);
+   opts.optionalB("energyLogFile", "energyLogTotal", "Logging the total energy as well",
+       &energyLogTotal, FALSE);
 
    opts.optional("main", "rescaleFreq", "Number of steps between "
     "velocity rescaling", &rescaleFreq);
@@ -1245,8 +1246,12 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
    opts.units("rescaleTemp", N_KELVIN);
    opts.optionalB("main", "rescaleAdaptive", "Adaptively reduce the magnitude "
     "of the velocity rescaling", &rescaleAdaptiveOn, FALSE);
-   opts.optional("rescaleAdaptive", "rescaleAdaptiveDedk", "Heuristic multiple of the reduction factor ",
-    &rescaleAdaptiveDedk, 0.0);
+   opts.optional("rescaleAdaptive", "rescaleAdaptiveDKdE", "Heuristic ratio of the reduction factor",
+    &rescaleAdaptiveDKdE, 0.0);
+   opts.optional("rescaleAdaptive", "rescaleAdaptiveDKdEMin", "Lower bound of the above ratio",
+    &rescaleAdaptiveDKdEMin, 0.1);
+   opts.optional("rescaleAdaptive", "rescaleAdaptiveS", "Relative scaling strength",
+    &rescaleAdaptiveS, 1.0);
    opts.optional("rescaleAdaptive", "rescaleAdaptiveFile",
        "File for writing the adaptive velocity-rescaling restart information",
        rescaleAdaptiveFile);
@@ -1254,6 +1259,9 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
        "Frequency of writing the adaptive velocity-rescaling restart information",
        &rescaleAdaptiveFileFreq, 10000);
    opts.range("rescaleAdaptiveFileFreq", POSITIVE);
+   opts.optional("main", "rescaleInitTotal",
+       "Total energy at the beginning of simulation",
+       &rescaleInitTotal, 0.0);
 
    opts.optional("main", "reassignFreq", "Number of steps between "
     "velocity reassignment", &reassignFreq);
@@ -3097,10 +3105,11 @@ void SimParameters::check_config(ParseOptions &opts, ConfigList *config, char *&
    if ( opts.defined("rescaleFreq") ) thstat_cnt++;
    if ( langRescaleOn ) thstat_cnt++;
    if ( tNHCOn ) thstat_cnt++;
+   if ( langevinOn ) thstat_cnt++;
 
    if ( thstat_cnt > 1 )
    {
-      NAMD_die("Temperature coupling, temperature rescaling, Langevin-style velocity rescaling thermostat, and Nose-Hoover chain thermostat are mutually exclusive");
+      NAMD_die("Temperature coupling, temperature rescaling, Langevin-style velocity rescaling thermostat, Nose-Hoover chain thermostat, and Langevin dynamics are mutually exclusive");
    }
 
    if (globalOn && CkNumPes() > 1)
@@ -3213,7 +3222,7 @@ void SimParameters::check_config(ParseOptions &opts, ConfigList *config, char *&
 
     if ( rescaleAdaptiveOn ) {
       if ( !opts.defined("rescaleAdaptiveFile") ) {
-        strcpy(rescaleAdaptiveFile, "adaptvrescale.dat");
+        strcpy(rescaleAdaptiveFile, "avrescale.dat");
       }
     }
 
