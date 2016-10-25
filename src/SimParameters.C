@@ -1250,8 +1250,8 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
     &rescaleAdaptiveDKdE, 0.0);
    opts.optional("rescaleAdaptive", "rescaleAdaptiveDKdEMin", "Lower bound of the above ratio",
     &rescaleAdaptiveDKdEMin, 0.1);
-   opts.optional("rescaleAdaptive", "rescaleAdaptiveS", "Relative scaling strength",
-    &rescaleAdaptiveS, 1.0);
+   opts.optional("rescaleAdaptive", "rescaleAdaptiveZoom", "Relative scaling strength",
+    &rescaleAdaptiveZoom, 1.0);
    opts.optional("rescaleAdaptive", "rescaleAdaptiveFile",
        "File for writing the adaptive velocity-rescaling restart information",
        rescaleAdaptiveFile);
@@ -3284,7 +3284,7 @@ void SimParameters::check_config(ParseOptions &opts, ConfigList *config, char *&
 
    if (!opts.defined("seed")) 
    {
-      randomSeed = (unsigned int) time(NULL) + 31530001 * CmiMyPartition();
+      randomSeed = (unsigned int) (time(NULL) + 7 * clock()) + 31530001 * CmiMyPartition();
    }
 
 //Modifications for alchemical fep

@@ -1084,15 +1084,15 @@ void Controller::rescaleVelocities(int step)
       }
       BigReal factor = sqrt(rescaleTemp/avgTemp);
       if ( simParams->rescaleAdaptiveOn ) {
+        BigReal bref = 1.0 / (BOLTZMANN * rescaleTemp);
         BigReal dbdk = rescaleVelocities_sumDbde / rescaleVelocities_sum1;
         BigReal bet = rescaleVelocities_sumBeta / rescaleVelocities_sum1;
         BigReal bvar = rescaleVelocities_sumBeta2 / rescaleVelocities_sum1 - bet * bet;
         BigReal dbde;
         // recompute the velocity-rescaling factor
         if ( simParams->rescaleAdaptiveDKdE > 0 ) { // heuristic method
-          BigReal beta0 = 1.0 / (BOLTZMANN * temperature);
-          BigReal dbdkheu = -beta0 * beta0 / (0.5 * numDegFreedom - 1);
-          dbde = dbdkheu * simParams->rescaleAdaptiveDKdE;
+          dbde = -simParams->rescaleAdaptiveDKdE * bref * bref
+               / (0.5 * numDegFreedom + simParams->rescaleAdaptiveDKdE - 2);
         } else { // exact method
           if ( rescaleVelocities_numTemps < 10 ) {
             dbde = dbdk;
@@ -1105,10 +1105,10 @@ void Controller::rescaleVelocities(int step)
         BigReal bave = rescaleVelocities_sbeta / rescaleVelocities_count;
         rescaleVelocities_count = 0;
         rescaleVelocities_sbeta = 0;
-        BigReal bref = 1.0 / (BOLTZMANN * rescaleTemp);
         BigReal dbeta = bref - bave;
         BigReal de = dbeta / dbde;
-        BigReal s = simParams->rescaleAdaptiveS * (de / ek) * simParams->rescaleFreq / rescaleVelocities_sum1;
+        BigReal s = simParams->rescaleAdaptiveZoom * (de / ek)
+                  * simParams->rescaleFreq / rescaleVelocities_sum1;
         if ( s > 0.5 ) s = 0.5;
         else if ( s < -0.5 ) s = -0.5;
         factor = sqrt(1 + s);
@@ -1183,6 +1183,8 @@ void Controller::rescaleForTotalEnergy()
   BigReal pe = totalEnergy - kineticEnergy;
   BigReal ke = simParams->rescaleInitTotal - pe;
   BigReal factor = (ke > 0) ? sqrt(ke/kineticEnergy) : 1.0;
+  CkPrintf("INFO: changing the initial KE from %g to %g\n",
+      kineticEnergy, ke);
   broadcast->velocityRescaleFactor.publish(0,factor);
   kineticEnergy = ke;
   totalEnergy = ke + pe;

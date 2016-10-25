@@ -526,7 +526,7 @@ public:
 	Bool rescaleAdaptiveOn;		//  Adaptively reduce the velocity-rescaling factor
 	BigReal rescaleAdaptiveDKdE;	//  Heuristic ratio of the reduction factor
 	BigReal rescaleAdaptiveDKdEMin;	//  Lower bound of the above ratio
-        BigReal rescaleAdaptiveS;       //  Relative scaling strength
+        BigReal rescaleAdaptiveZoom;    //  Relative scaling strength
 	char rescaleAdaptiveFile[128];	//  File to save the adaptive veloctiy-rescaling data
 	int rescaleAdaptiveFileFreq;	//  Frequency to save the adaptive veloctiy-rescaling restart file
         BigReal rescaleInitTotal;       //  Total energy at the beginning of simulation
