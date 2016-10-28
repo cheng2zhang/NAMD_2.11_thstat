@@ -530,6 +530,7 @@ public:
 	char rescaleAdaptiveFile[128];	//  File to save the adaptive veloctiy-rescaling data
 	int rescaleAdaptiveFileFreq;	//  Frequency to save the adaptive veloctiy-rescaling restart file
         BigReal rescaleInitTotal;       //  Total energy at the beginning of simulation
+        BigReal rescaleInitDev;         //  Standard deviation of the total energy at the beginning of simulation
 
         Bool accelMDOn;                 //  Perform accelerated MD
         Bool accelMDdihe;               //  Apply boost to the dihedral potential

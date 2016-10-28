@@ -1259,9 +1259,10 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
        "Frequency of writing the adaptive velocity-rescaling restart information",
        &rescaleAdaptiveFileFreq, 10000);
    opts.range("rescaleAdaptiveFileFreq", POSITIVE);
-   opts.optional("main", "rescaleInitTotal",
-       "Total energy at the beginning of simulation",
+   opts.optional("main", "rescaleInitTotal", "Initial total energy",
        &rescaleInitTotal, 0.0);
+   opts.optional("main", "rescaleInitDev", "Standard deviation of the initial total energy",
+       &rescaleInitDev, 0.0);
 
    opts.optional("main", "reassignFreq", "Number of steps between "
     "velocity reassignment", &reassignFreq);
@@ -3284,7 +3285,7 @@ void SimParameters::check_config(ParseOptions &opts, ConfigList *config, char *&
 
    if (!opts.defined("seed")) 
    {
-      randomSeed = (unsigned int) (time(NULL) + 7 * clock()) + 31530001 * CmiMyPartition();
+      randomSeed = (unsigned int) (time(NULL) + 314159 * clock()) + 31530001 * CmiMyPartition();
    }
 
 //Modifications for alchemical fep

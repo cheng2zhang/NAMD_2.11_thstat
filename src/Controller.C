@@ -444,16 +444,22 @@ void Controller::integrate(int scriptTask) {
 
   }
     keHistInit();
-    std::ofstream fsEnergyLog;
-    if ( simParams->energyLogFreq > 0 ) {
-      fsEnergyLog.open(simParams->energyLogFile, std::ios_base::app);
-    }
     if ( simParams->rescaleInitTotal != 0 ) {
       rescaleForTotalEnergy();
     }
     iout << "Potential energy " << totalEnergy - kineticEnergy
          << ", kinetic energy " << kineticEnergy
          << ", total energy " << totalEnergy << "\n" << endi;
+    std::ofstream fsEnergyLog;
+    if ( simParams->energyLogFreq > 0 ) {
+      fsEnergyLog.open(simParams->energyLogFile, std::ios_base::app);
+      fsEnergyLog << step << " " << (totalEnergy - kineticEnergy);
+      if ( simParams->energyLogTotal )
+        fsEnergyLog << " " << totalEnergy;
+      if ( simParams->adaptTempOn )
+        fsEnergyLog << " " << adaptTempT;
+      fsEnergyLog << std::endl;
+    }
 
     // Handling SIGINT doesn't seem to be working on Lemieux, and it
     // sometimes causes the net-xxx versions of NAMD to segfault on exit, 
@@ -547,7 +553,10 @@ void Controller::integrate(int scriptTask) {
     
     adaptTempDone(step);
     rescaleVelocitiesSave(step);
-    if ( fsEnergyLog.is_open() ) fsEnergyLog.close();
+    if ( fsEnergyLog.is_open() ) {
+      fsEnergyLog << std::endl;
+      fsEnergyLog.close();
+    }
     tNHCDone(step);
     keHistDone(step);
 }
@@ -1094,17 +1103,17 @@ void Controller::rescaleVelocities(int step)
           dbde = -simParams->rescaleAdaptiveDKdE * bref * bref
                / (0.5 * numDegFreedom + simParams->rescaleAdaptiveDKdE - 2);
         } else { // exact method
-          if ( rescaleVelocities_numTemps < 10 ) {
+          if ( rescaleVelocities_sum1 < 10 ) {
             dbde = dbdk;
           } else {
             dbde = dbdk + bvar;
+            //CkPrintf("dbdk %g, dbde %g, bvar %g, threshold %g, count %g\n",
+            //    dbdk, dbde, bvar, simParams->rescaleAdaptiveDKdEMin * dbdk, rescaleVelocities_count);
             if ( dbde > simParams->rescaleAdaptiveDKdEMin * dbdk )
               dbde = simParams->rescaleAdaptiveDKdEMin * dbdk;
           }
         }
         BigReal bave = rescaleVelocities_sbeta / rescaleVelocities_count;
-        rescaleVelocities_count = 0;
-        rescaleVelocities_sbeta = 0;
         BigReal dbeta = bref - bave;
         BigReal de = dbeta / dbde;
         BigReal s = simParams->rescaleAdaptiveZoom * (de / ek)
@@ -1113,8 +1122,8 @@ void Controller::rescaleVelocities(int step)
         else if ( s < -0.5 ) s = -0.5;
         factor = sqrt(1 + s);
         if ( fmod(rescaleVelocities_sum1, simParams->rescaleAdaptiveFileFreq) < 0.5 ) {
-          CkPrintf("step %d, factor %g, s %g, bet %g/%g, dbde %g/%g = %5.3f, bvar %g, delE/K %g, tp %g, dof %ld\n",
-              step, factor, s, bet, bref, dbde, dbdk, dbde/dbdk, bvar, de/ek, temperature, (long) numDegFreedom); // getchar();
+          CkPrintf("step %d, factor %g, s %g, dbeta %g, bet %g/%g, dbde %g/%g = %5.3f, bvar %g, delE/K %g, tp %g, dof %ld\n",
+              step, factor, s, dbeta, bet, bref, dbde, dbdk, dbde/dbdk, bvar, de/ek, temperature, (long) numDegFreedom); // getchar();
           rescaleVelocitiesSave(step);
         }
       }
@@ -1123,6 +1132,8 @@ void Controller::rescaleVelocities(int step)
       //     << " FROM AVERAGE TEMPERATURE OF " << avgTemp
       //     << " TO " << rescaleTemp << " KELVIN.\n" << endi;
       rescaleVelocities_sumTemps = 0;  rescaleVelocities_numTemps = 0;
+      rescaleVelocities_count = 0;
+      rescaleVelocities_sbeta = 0;
     }
   }
 }
@@ -1181,11 +1192,13 @@ void Controller::rescaleVelocitiesSave(int step)
 void Controller::rescaleForTotalEnergy()
 {
   BigReal pe = totalEnergy - kineticEnergy;
-  BigReal ke = simParams->rescaleInitTotal - pe;
+  BigReal target = simParams->rescaleInitTotal
+                 + random->gaussian() * simParams->rescaleInitDev;
+  BigReal ke = target - pe;
   BigReal factor = (ke > 0) ? sqrt(ke/kineticEnergy) : 1.0;
-  CkPrintf("INFO: changing the initial KE from %g to %g\n",
-      kineticEnergy, ke);
-  broadcast->velocityRescaleFactor.publish(0,factor);
+  CkPrintf("Info: changing the initial KE from %g to %g, target total energy %g\n",
+      kineticEnergy, ke, target);
+  broadcast->velocityRescaleFactor.publish(0, factor);
   kineticEnergy = ke;
   totalEnergy = ke + pe;
 }
