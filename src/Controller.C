@@ -1116,8 +1116,13 @@ void Controller::rescaleVelocities(int step)
         BigReal bave = rescaleVelocities_sbeta / rescaleVelocities_count;
         BigReal dbeta = bref - bave;
         BigReal de = dbeta / dbde;
-        BigReal s = simParams->rescaleAdaptiveZoom * (de / ek)
-                  * simParams->rescaleFreq / rescaleVelocities_sum1;
+        BigReal s;
+        if ( simParams->rescaleAdaptiveMag > 0 ) {
+          s = simParams->rescaleAdaptiveMag * (de / ek);
+        } else {
+          s = simParams->rescaleAdaptiveZoom * (de / ek)
+            * simParams->rescaleFreq / rescaleVelocities_sum1;
+        }
         if ( s > 0.5 ) s = 0.5;
         else if ( s < -0.5 ) s = -0.5;
         factor = sqrt(1 + s);

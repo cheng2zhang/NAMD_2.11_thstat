@@ -527,6 +527,7 @@ public:
 	BigReal rescaleAdaptiveDKdE;	//  Heuristic ratio of the reduction factor
 	BigReal rescaleAdaptiveDKdEMin;	//  Lower bound of the above ratio
         BigReal rescaleAdaptiveZoom;    //  Relative scaling strength
+        BigReal rescaleAdaptiveMag;     //  Fixed scaling magnitude
 	char rescaleAdaptiveFile[128];	//  File to save the adaptive veloctiy-rescaling data
 	int rescaleAdaptiveFileFreq;	//  Frequency to save the adaptive veloctiy-rescaling restart file
         BigReal rescaleInitTotal;       //  Total energy at the beginning of simulation

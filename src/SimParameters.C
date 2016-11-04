@@ -1184,15 +1184,15 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
      "default is 'O'", PARSE_STRING);
 
    //  Get parameters for the Langevin velocity-rescaling thermostat
-   opts.optionalB("main", "langrescale", 
+   opts.optionalB("main", "langRescale", 
       "Should Langevin velocity-rescaling thermostat be turned on?",
       &langRescaleOn, FALSE);
-   opts.require("langrescale", "langRescaleTemp",
+   opts.require("langRescale", "langRescaleTemp",
     "Temperature for Langevin velocity-rescaling thermostat",
     &langRescaleTemp);
    opts.range("langRescaleTemp", NOT_NEGATIVE);
    opts.units("langRescaleTemp", N_KELVIN);
-   opts.optional("langrescale", "langRescaleDt",
+   opts.optional("langRescale", "langRescaleDt",
     "Inverse viscosity in femtoseconds for Langevin velocity-rescaling thermostat",
     &langRescaleDt, 20.0);
 
@@ -1252,6 +1252,8 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
     &rescaleAdaptiveDKdEMin, 0.1);
    opts.optional("rescaleAdaptive", "rescaleAdaptiveZoom", "Relative scaling strength",
     &rescaleAdaptiveZoom, 1.0);
+   opts.optional("rescaleAdaptive", "rescaleAdaptiveMag", "Fixed scaling magnitude",
+    &rescaleAdaptiveMag, 0.0);
    opts.optional("rescaleAdaptive", "rescaleAdaptiveFile",
        "File for writing the adaptive velocity-rescaling restart information",
        rescaleAdaptiveFile);
