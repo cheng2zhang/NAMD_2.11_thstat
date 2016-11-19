@@ -524,7 +524,7 @@ public:
 	int rescaleFreq;		//  Velocity rescale frequency
 	BigReal rescaleTemp;		//  Temperature to rescale to
 	Bool rescaleAdaptiveOn;		//  Adaptively reduce the velocity-rescaling factor
-	BigReal rescaleAdaptiveDKdE;	//  Heuristic ratio of the reduction factor
+	BigReal rescaleAdaptiveDKdE;	//  Heuristic ratio of kinetic energy to total energy
 	BigReal rescaleAdaptiveDKdEMin;	//  Lower bound of the above ratio
         BigReal rescaleAdaptiveZoom;    //  Relative scaling strength
         BigReal rescaleAdaptiveMag;     //  Fixed scaling magnitude

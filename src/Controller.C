@@ -1093,12 +1093,12 @@ void Controller::rescaleVelocities(int step)
       }
       BigReal factor = sqrt(rescaleTemp/avgTemp);
       if ( simParams->rescaleAdaptiveOn ) {
+        // recompute the velocity-rescaling factor
         BigReal bref = 1.0 / (BOLTZMANN * rescaleTemp);
         BigReal dbdk = rescaleVelocities_sumDbde / rescaleVelocities_sum1;
         BigReal bet = rescaleVelocities_sumBeta / rescaleVelocities_sum1;
         BigReal bvar = rescaleVelocities_sumBeta2 / rescaleVelocities_sum1 - bet * bet;
         BigReal dbde;
-        // recompute the velocity-rescaling factor
         if ( simParams->rescaleAdaptiveDKdE > 0 ) { // heuristic method
           dbde = -simParams->rescaleAdaptiveDKdE * bref * bref
                / (0.5 * numDegFreedom + simParams->rescaleAdaptiveDKdE - 2);
@@ -1136,6 +1136,7 @@ void Controller::rescaleVelocities(int step)
       //iout << "RESCALING VELOCITIES AT STEP " << step
       //     << " FROM AVERAGE TEMPERATURE OF " << avgTemp
       //     << " TO " << rescaleTemp << " KELVIN.\n" << endi;
+      // reset accumulators for block averages
       rescaleVelocities_sumTemps = 0;  rescaleVelocities_numTemps = 0;
       rescaleVelocities_count = 0;
       rescaleVelocities_sbeta = 0;
