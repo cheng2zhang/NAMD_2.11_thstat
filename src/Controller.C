@@ -2051,6 +2051,10 @@ void Controller::adaptTempInit(int step) {
           // In case file is manually edited
           if (adaptTempBetaMin > adaptTempBetaMax)
             std::swap(adaptTempBetaMin, adaptTempBetaMax);
+          if ( adaptTempT > 1./adaptTempBetaMin )
+            adaptTempT = 1./adaptTempBetaMin;
+          if ( adaptTempT < 1./adaptTempBetaMax )
+            adaptTempT = 1./adaptTempBetaMax;
           ss >> adaptTempBins;     
           ss >> adaptTempCg;
           ss >> adaptTempDt;
@@ -2154,6 +2158,7 @@ void Controller::adaptTempInit(int step) {
         adaptTempRead.close();
       }
       else NAMD_die("Could not open ADAPTIVE TEMPERING restart file.\n");
+      broadcast->adaptTemperature.publish(0, adaptTempT);
     } 
     else {
       adaptTempBins = simParams->adaptTempBins;
@@ -2410,6 +2415,7 @@ BigReal Controller::adaptTempGetIntE(BigReal beta, int i, BigReal nbeta, int ni)
 {
     double delta = 0, epave = 0, beta_n;
     int j, sgn = ( i <= ni ) ? 1 : -1;
+
     for ( j = i; ; j += sgn ) {
       if ( !simParams->adaptTempFixedAve ) // recompute the average energy
         adaptTempPotEnergyAve[j] = epave = adaptTempGetPEAve(j, epave);

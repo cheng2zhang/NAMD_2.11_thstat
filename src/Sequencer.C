@@ -273,7 +273,6 @@ void Sequencer::integrate(int scriptTask) {
       doEnergy = 1;
     runComputeObjects(1,step<numberOfSteps); // must migrate here!
     rescaleaccelMD(step, doNonbonded, doFullElectrostatics); // for accelMD 
-    adaptTempUpdate(step); // update adaptive tempering temperature
 
     if ( staleForces || doTcl || doColvars ) {
       if ( doNonbonded ) saveForce(Results::nbond);
@@ -309,6 +308,8 @@ void Sequencer::integrate(int scriptTask) {
 		addForceToMomentum(-0.5*slowstep,Results::slow,staleForces,1);
     }
     submitReductions(step);
+    // place moved to match the order in Controller.C
+    adaptTempUpdate(step); // update adaptive tempering temperature
     if(traceIsOn()){
         traceUserEvent(eventEndOfTimeStep);
         sprintf(traceNote, "%s%d",tracePrefix,step); 
@@ -1210,12 +1211,34 @@ Bool Sequencer::adaptTempUpdate(int step)
 
    //check if adaptive tempering is enabled and in the right timestep range
    if (!simParams->adaptTempOn) return scaled;
+
    if ( (step < simParams->adaptTempFirstStep ) || 
      ( simParams->adaptTempLastStep > 0 && step > simParams->adaptTempLastStep )) {
         // restore the temperature of the active thermostat
         adaptTempT = simParams->thermostatTemp();
         return scaled;
    }
+
+   if ( step == simParams->firstTimestep ) {
+     // initialization
+     if ( simParams->adaptTempInFile[0] != '\0' ) {
+       // use the temperature from the input restart file
+       adaptTempT = broadcast->adaptTemperature.get(0);
+       //CkPrintf("Sequencer %s, adaptTemp %g\n", simParams->adaptTempInFile, adaptTempT); // getchar();
+       // if initialTemp is set, the initial velocities are randomly
+       // set according to initialTemp, we need to scale velocities
+       // to match adaptTempT
+       // cf. WorkDistrib.C, createAtomLists() -> random_velocities()
+       //   random_velocities(params->initialTemp, ...);
+       if ( simParams->initialTemp > 0 ) {
+         BigReal s = sqrt(adaptTempT / simParams->initialTemp);
+         rescaleVelocitiesByFactor( s );
+       }
+       // otherwise, we have reloaded the velocities from the
+       // previous run, and no scaling is needed
+     }
+   }
+
    // Get Updated Temperature
    if ( !(step % simParams->adaptTempFreq ) && (step > simParams->firstTimestep ))
    {
