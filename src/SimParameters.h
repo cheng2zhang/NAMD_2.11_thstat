@@ -577,8 +577,9 @@ public:
         Bool adaptTempRestartAppend;           //  Appending instead of overwriting the restart file
         Bool adaptTempSepOn;                   //  Using a separate multiple-bin estimator for each bin
         BigReal adaptTempSamplesMin;           //  Minimal number of samples in a bin to start temperature transitions
-        Bool adaptTempAnalytic;                //  Assuming the potential energy and temprature follows the relation of U = a T^e + b
+        Bool adaptTempAnalytic;                //  Assuming the potential energy and temperature follows the relation of U = a T^e + b
         BigReal adaptTempExponent;             //  The exponent e in the above formula
+        Bool adaptTempVarSlope;                //  Use variance instead of finite difference to estimate the slope, a
         Bool adaptTempRandom;                  //  Do we assign random temperatures when we step out of [Tmin,Tmax]?
         /* End Adaptive Temperature Sampling */
 
