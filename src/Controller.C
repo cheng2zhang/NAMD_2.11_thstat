@@ -187,6 +187,7 @@ Controller::Controller(NamdState *s) :
     rescaleVelocities_count    = 0;
     rescaleVelocities_sbeta    = 0;
     rescaleVelocities_sum1     = 0;
+    rescaleVelocities_sumKT    = 0;
     rescaleVelocities_sumBeta  = 0;
     rescaleVelocities_sumBeta2 = 0;
     rescaleVelocities_sumDbde  = 0;
@@ -1073,14 +1074,19 @@ void Controller::rescaleVelocities(int step)
 {
   const int rescaleFreq = simParams->rescaleFreq;
   if ( rescaleFreq > 0 ) {
-    rescaleVelocities_sumTemps += temperature;  ++rescaleVelocities_numTemps;
-    BigReal ek = 0.5 * BOLTZMANN * temperature * numDegFreedom;
+    BigReal kT = BOLTZMANN * temperature;
+    BigReal ek = 0.5 * numDegFreedom * kT;
     BigReal beta = (0.5 * numDegFreedom - 1) / ek;
+    //CkPrintf("step %d, temperature %g, kT %g, beta %g\n", step, temperature, kT, beta); // getchar();
     // the following quantities are accumulated to compute the block average of beta
+    // they will be cleared after each velocity scaling step
     rescaleVelocities_count += 1;
     rescaleVelocities_sbeta += beta;
-    // the following quantities are accumulated to compute beta'(E)
+    rescaleVelocities_sumTemps += temperature;  ++rescaleVelocities_numTemps;
+    // the following quantities are accumulated to compute K'(E) and beta'(E)
+    // they won't be cleared after each velocity scaling step
     rescaleVelocities_sum1     += 1;
+    rescaleVelocities_sumKT    += kT;
     rescaleVelocities_sumBeta  += beta;
     rescaleVelocities_sumBeta2 += beta * beta;
     rescaleVelocities_sumDbde  += -beta / ek;
@@ -1093,33 +1099,58 @@ void Controller::rescaleVelocities(int step)
       }
       BigReal factor = sqrt(rescaleTemp/avgTemp);
       if ( simParams->rescaleAdaptiveOn ) {
+        BigReal de, s, gamma;
         // recompute the velocity-rescaling factor
-        BigReal bref = 1.0 / (BOLTZMANN * rescaleTemp);
-        BigReal dbdk = rescaleVelocities_sumDbde / rescaleVelocities_sum1;
-        BigReal bet = rescaleVelocities_sumBeta / rescaleVelocities_sum1;
-        BigReal bvar = rescaleVelocities_sumBeta2 / rescaleVelocities_sum1 - bet * bet;
-        BigReal dbde;
-        if ( simParams->rescaleAdaptiveDKdE > 0 ) { // heuristic method
-          dbde = -simParams->rescaleAdaptiveDKdE * bref * bref
-               / (0.5 * numDegFreedom + simParams->rescaleAdaptiveDKdE - 2);
-        } else { // exact method
-          if ( rescaleVelocities_sum1 < 10 ) {
-            dbde = dbdk;
-          } else {
-            dbde = dbdk + bvar;
-            //CkPrintf("dbdk %g, dbde %g, bvar %g, threshold %g, count %g\n",
-            //    dbdk, dbde, bvar, simParams->rescaleAdaptiveDKdEMin * dbdk, rescaleVelocities_count);
-            if ( dbde > simParams->rescaleAdaptiveDKdEMin * dbdk )
-              dbde = simParams->rescaleAdaptiveDKdEMin * dbdk;
+        if ( !simParams->rescaleAdaptiveSurf ) { // bulk definition
+          BigReal kref = BOLTZMANN * rescaleTemp * 0.5 * numDegFreedom;
+          BigReal ktav = rescaleVelocities_sumKT / rescaleVelocities_sum1;
+          BigReal betav = rescaleVelocities_sumBeta / rescaleVelocities_sum1;
+          //CkPrintf("step %d, ktav %g, betav %g, sum1 %g\n", step, ktav, betav, rescaleVelocities_sum1);
+          BigReal dkde;
+          if ( simParams->rescaleAdaptiveDKdE > 0 ) { // heuristic method
+            dkde = simParams->rescaleAdaptiveDKdE;
+          } else { // exact method
+            if ( rescaleVelocities_sum1 < 10 ) {
+              dkde = 1; // ideal-gas limit
+            } else {
+              dkde = (1 - ktav * betav) * 0.5 * numDegFreedom;
+              //dkde = (1 - BOLTZMANN * rescaleTemp * betav) * 0.5 * numDegFreedom;
+              //CkPrintf("dktde %g(%g), ktav %g, betav %g, threshold %g, gamma %g, temperature %g\n",
+              //    1 - ktav * betav, 1 - BOLTZMANN * rescaleTemp * betav, ktav, betav, simParams->rescaleAdaptiveDKdEMin, dkde, temperature);
+              if ( dkde < simParams->rescaleAdaptiveDKdEMin )
+                dkde = simParams->rescaleAdaptiveDKdEMin;
+            }
           }
+          de = (kref - BOLTZMANN * avgTemp * 0.5 * numDegFreedom) / dkde;
+          gamma = dkde;
+        } else { // surface definition 
+          BigReal bref = 1.0 / (BOLTZMANN * rescaleTemp);
+          BigReal dbdk = rescaleVelocities_sumDbde / rescaleVelocities_sum1;
+          BigReal bet = rescaleVelocities_sumBeta / rescaleVelocities_sum1;
+          BigReal bvar = rescaleVelocities_sumBeta2 / rescaleVelocities_sum1 - bet * bet;
+          BigReal dbde;
+          if ( simParams->rescaleAdaptiveDKdE > 0 ) { // heuristic method
+            dbde = -simParams->rescaleAdaptiveDKdE * bref * bref
+                 / (0.5 * numDegFreedom + simParams->rescaleAdaptiveDKdE - 2);
+          } else { // exact method
+            if ( rescaleVelocities_sum1 < 10 ) {
+              dbde = dbdk;
+            } else {
+              dbde = dbdk + bvar;
+              //CkPrintf("dbdk %g, dbde %g, bvar %g, threshold %g, gamma %g\n",
+              //    dbdk, dbde, bvar, simParams->rescaleAdaptiveDKdEMin * dbdk, dbde/dbdk);
+              if ( dbde > simParams->rescaleAdaptiveDKdEMin * dbdk )
+                dbde = simParams->rescaleAdaptiveDKdEMin * dbdk;
+            }
+          }
+          BigReal bave = rescaleVelocities_sbeta / rescaleVelocities_count;
+          de = (bref - bave) / dbde;
+          gamma = dbde / dbdk;
         }
-        BigReal bave = rescaleVelocities_sbeta / rescaleVelocities_count;
-        BigReal dbeta = bref - bave;
-        BigReal de = dbeta / dbde;
-        BigReal s;
-        if ( simParams->rescaleAdaptiveMag > 0 ) {
+        // Compute the velocities scaling factor
+        if ( simParams->rescaleAdaptiveMag > 0 ) { // fix the scaling magnitude
           s = simParams->rescaleAdaptiveMag * (de / ek);
-        } else {
+        } else { // use the 1/t prescrition for the scaling magnitude
           s = simParams->rescaleAdaptiveZoom * (de / ek)
             * simParams->rescaleFreq / rescaleVelocities_sum1;
         }
@@ -1127,8 +1158,8 @@ void Controller::rescaleVelocities(int step)
         else if ( s < -0.5 ) s = -0.5;
         factor = sqrt(1 + s);
         if ( fmod(rescaleVelocities_sum1, simParams->rescaleAdaptiveFileFreq) < 0.5 ) {
-          CkPrintf("step %d, factor %g, s %g, dbeta %g, bet %g/%g, dbde %g/%g = %5.3f, bvar %g, delE/K %g, tp %g, dof %ld\n",
-              step, factor, s, dbeta, bet, bref, dbde, dbdk, dbde/dbdk, bvar, de/ek, temperature, (long) numDegFreedom); // getchar();
+          CkPrintf("step %d, factor %g, s %g, dE/K %g = %g/%g, tp %g, dof %ld, gamma %g\n",
+              step, factor, s, de/ek, de, ek, temperature, (long) numDegFreedom, gamma);
           rescaleVelocitiesSave(step);
         }
       }
@@ -1150,20 +1181,20 @@ void Controller::rescaleVelocitiesInit(void)
     numDegFreedom = Node::Object()->molecule->num_deg_freedom();
   if ( simParams->rescaleFreq <= 0 || !simParams->rescaleAdaptiveOn )
     return;
-  rescaleVelocitiesLoad();
+  rescaleVelocitiesLoad(simParams->rescaleAdaptiveInFile);
 }
 
-void Controller::rescaleVelocitiesLoad(void)
+void Controller::rescaleVelocitiesLoad(const char *fn)
 {
   if ( simParams->rescaleFreq <= 0 || !simParams->rescaleAdaptiveOn )
     return;
-  std::ifstream fs(simParams->rescaleAdaptiveFile);
+  std::ifstream fs(fn);
   if ( !fs ) return;
-  double cnt, beta, beta2, dbde;
-  fs >> cnt >> beta >> beta2 >> dbde;
+  double cnt, kT, beta, beta2, dbde;
+  fs >> cnt >> kT >> beta >> beta2 >> dbde;
   fs.close();
   iout << "LOADED ADAPTIVE VELOCITY-RESCALING DATA FROM "
-       << simParams->rescaleAdaptiveFile << ": STEP " << cnt
+       << fn << ": STEP " << cnt
        << ", BETA " << beta << ", VAR(BETA) " << beta2
        << ", BETA'(E) " << dbde << "\n" << endi;
   beta2 += beta * beta;
@@ -1171,6 +1202,7 @@ void Controller::rescaleVelocitiesLoad(void)
     cnt = cnt / simParams->rescaleFreq * simParams->rescaleFreq;
   }
   rescaleVelocities_sum1 = cnt;
+  rescaleVelocities_sumKT = cnt * kT;
   rescaleVelocities_sumBeta = cnt * beta;
   rescaleVelocities_sumBeta2 = cnt * beta2;
   rescaleVelocities_sumDbde = cnt * dbde;
@@ -1185,12 +1217,14 @@ void Controller::rescaleVelocitiesSave(int step)
   NAMD_backup_file(simParams->rescaleAdaptiveFile);
   ofstream_namd fs(simParams->rescaleAdaptiveFile);
   if ( !fs ) return;
+  BigReal kT = rescaleVelocities_sumKT / rescaleVelocities_sum1;
   BigReal beta = rescaleVelocities_sumBeta / rescaleVelocities_sum1;
   BigReal beta2 = rescaleVelocities_sumBeta2 / rescaleVelocities_sum1
                 - beta * beta;
   BigReal dbde = rescaleVelocities_sumDbde / rescaleVelocities_sum1;
   char buf[200];
-  sprintf(buf, "%.0f %.10f %.10f %.10f\n", rescaleVelocities_sum1, beta, beta2, dbde);
+  sprintf(buf, "%.0f %.10f %.10f %.10f %.10f\n",
+      rescaleVelocities_sum1, kT, beta, beta2, dbde);
   fs << buf;
 }
 
@@ -1202,8 +1236,8 @@ void Controller::rescaleForTotalEnergy(void)
                  + random->gaussian() * simParams->rescaleInitDev;
   BigReal ke = target - pe;
   BigReal factor = (ke > 0) ? sqrt(ke/kineticEnergy) : 1.0;
-  CkPrintf("Info: changing the initial KE from %g to %g, target total energy %g\n",
-      kineticEnergy, ke, target);
+  CkPrintf("Info: changing the initial KE from %g to %g, target total energy %g, factor %g\n",
+      kineticEnergy, ke, target, factor);
   broadcast->velocityRescaleFactor.publish(0, factor);
   kineticEnergy = ke;
   totalEnergy = ke + pe;

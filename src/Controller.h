@@ -153,15 +153,18 @@ protected:
     void rescaleForTotalEnergy(void);
     void rescaleVelocities(int);
     void rescaleVelocitiesInit(void);
-    void rescaleVelocitiesLoad(void);
+    void rescaleVelocitiesLoad(const char *);
     void rescaleVelocitiesSave(int);
       BigReal rescaleVelocities_sumTemps;
       int rescaleVelocities_numTemps;
       // the following quantities are used to compute the block average of beta
+      // they will be cleared after each velocity scaling step
       BigReal rescaleVelocities_count;
       BigReal rescaleVelocities_sbeta;
       // the following quantities are used to compute beta'(E)
+      // they won't be cleared after each velocity scaling step
       BigReal rescaleVelocities_sum1;
+      BigReal rescaleVelocities_sumKT;
       BigReal rescaleVelocities_sumBeta;
       BigReal rescaleVelocities_sumBeta2;
       BigReal rescaleVelocities_sumDbde;

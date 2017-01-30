@@ -1246,6 +1246,8 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
    opts.units("rescaleTemp", N_KELVIN);
    opts.optionalB("main", "rescaleAdaptive", "Adaptively reduce the magnitude "
     "of the velocity rescaling", &rescaleAdaptiveOn, FALSE);
+   opts.optionalB("rescaleAdaptive", "rescaleAdaptiveSurf", "Define temperature "
+    "based on the surface entropy instead of the bulk entropy", &rescaleAdaptiveSurf, FALSE);
    opts.optional("rescaleAdaptive", "rescaleAdaptiveDKdE", "Heuristic ratio of the reduction factor",
     &rescaleAdaptiveDKdE, 0.0);
    opts.optional("rescaleAdaptive", "rescaleAdaptiveDKdEMin", "Lower bound of the above ratio",
@@ -1257,6 +1259,9 @@ void SimParameters::config_parser_methods(ParseOptions &opts) {
    opts.optional("rescaleAdaptive", "rescaleAdaptiveFile",
        "File for writing the adaptive velocity-rescaling restart information",
        rescaleAdaptiveFile);
+   opts.optional("rescaleAdaptive", "rescaleAdaptiveInFile",
+       "File for loading the adaptive velocity-rescaling restart information",
+       rescaleAdaptiveInFile);
    opts.optional("rescaleAdaptive", "rescaleAdaptiveFileFreq",
        "Frequency of writing the adaptive velocity-rescaling restart information",
        &rescaleAdaptiveFileFreq, 10000);
